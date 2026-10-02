@@ -16,7 +16,7 @@ type PixiGameProps = {
   onMatchEnd: () => void
 }
 
-function getRandomInteger(min: number, max: number): number {
+export function getRandomInteger(min: number, max: number): number {
 
   const minCeil = Math.ceil(min);
   const maxFloor = Math.floor(max);
