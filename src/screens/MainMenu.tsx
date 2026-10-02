@@ -1,3 +1,5 @@
+import './MainMenu.css'
+
 type MainMenuProps = {
   onStartGame: () => void
   onOpenOptions: () => void
@@ -5,11 +7,11 @@ type MainMenuProps = {
 
 function MainMenu(props: MainMenuProps) {
   return (
-    <section>
-      <h1>Pirate Battle</h1>
+    <section className="main-menu">
+      <img src="public/assets/png/default/ui/menu/title_pirate_battle.png" alt="Pirate Battle" />
         <div className="menu-options">
-        <button onClick={props.onStartGame}>Start Game</button>
-        <button onClick={props.onOpenOptions}>Options</button>
+            <button className="menu-button" onClick={props.onStartGame}>Start Game</button>
+            <button className="menu-button"onClick={props.onOpenOptions}>Options</button>
         </div>
     </section>
   )

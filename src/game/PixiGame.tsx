@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { Application } from 'pixi.js'
+import './PixiGame.css'
 
 function PixiGame() {
   const hostRef = useRef<HTMLDivElement | null>(null)
