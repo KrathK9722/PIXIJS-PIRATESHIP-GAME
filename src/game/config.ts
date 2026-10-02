@@ -2,7 +2,7 @@
 // INITIAL IMPORTS
 // ================
 import type { PlayerOptions } from '../game/types.ts'
-import type { Island, MovementConfig } from './types'
+import type { MovementConfig } from './types'
 
 // ====================
 // SET OPTION'S LIMITS
@@ -58,12 +58,3 @@ export const MOVEMENT_CONFIG: MovementConfig = {
   moveSpeed: 180,
   rotationSpeed: Math.PI,
 }
-
-
-export const ISLANDS: Island[] = [
-  {
-    x: 300,
-    y: 270,
-    radius: 64,
-  },
-]

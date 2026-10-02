@@ -21,16 +21,12 @@ export type MovementConfig = {
 export type SimulationState = {
   player: PlayerState
   config: MovementConfig
-  islands: Island[]
+  elapsedSeconds: number
+  matchDurationSeconds: number
+  isFinished: boolean
 }
 
 export type PlayerOptions = {
   matchDurationSeconds: number
   spawnIntervalSeconds: number
-}
-
-export type Island = {
-  x: number
-  y: number
-  radius: number
 }

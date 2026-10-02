@@ -1,21 +1,63 @@
 import { useEffect, useRef } from 'react'
-import { Application, Assets, Graphics, Sprite, Texture } from 'pixi.js'
-import { ISLANDS, MOVEMENT_CONFIG } from './config'
+import { Application, Assets, Graphics, Sprite, Text, Texture } from 'pixi.js'
+import { MOVEMENT_CONFIG } from './config'
 import { createKeyboardInput } from './input'
 import { updateSimulation } from './simulation'
-
+import { formatTime } from './time'
 import type { SimulationState } from './types'
 import './PixiGame.css'
 
 const PLAYER_TEXTURE_URL = '/assets/png/default/ships/ship_1.png'
 
-function PixiGame() {
+type PixiGameProps = {
+  matchDurationSeconds: number
+  onTimeUpdate: (secondsRemaining: number) => void
+  onMatchEnd: () => void
+}
+
+function createInitialSimulationState(matchDurationSeconds: number): SimulationState {
+  return {
+    player: {
+      x: MOVEMENT_CONFIG.arenaWidth / 2,
+      y: MOVEMENT_CONFIG.arenaHeight / 2,
+      rotation: 0,
+    },
+    config: MOVEMENT_CONFIG,
+    elapsedSeconds: 0,
+    matchDurationSeconds,
+    isFinished: false,
+  }
+}
+
+function createPlayerSprite(texture: Texture): Sprite {
+  const playerSprite = new Sprite(texture)
+  playerSprite.anchor.set(0.5)
+  playerSprite.width = 48
+  playerSprite.height = 96
+  return playerSprite
+}
+
+function createPlayerRadiusPreview(): Graphics {
+  return new Graphics()
+    .circle(0, 0, MOVEMENT_CONFIG.playerRadius)
+    .fill({ color: 0xff0000, alpha: 0.25 })
+    .stroke({ color: 0xff3333, width: 2 })
+}
+
+
+
+function PixiGame(props: PixiGameProps) {
   const hostRef = useRef<HTMLDivElement | null>(null)
+  const matchDurationSeconds = props.matchDurationSeconds
+  const onTimeUpdate = props.onTimeUpdate
+  const onMatchEnd = props.onMatchEnd
 
   useEffect(() => {
     let disposed = false
+    let matchEndReported = false
+    let lastReportedSeconds = matchDurationSeconds
     let app: Application | null = null
-    const keyboardInput = createKeyboardInput()
+    let keyboardInput: ReturnType<typeof createKeyboardInput> | undefined
 
     async function initializePixi() {
       const host = hostRef.current
@@ -47,62 +89,73 @@ function PixiGame() {
       app = newApp
       host.appendChild(newApp.canvas)
 
-      const state: SimulationState = {
-        player: {
-          x: MOVEMENT_CONFIG.arenaWidth / 2,
-          y: MOVEMENT_CONFIG.arenaHeight / 2,
-          rotation: 0,
-        },
-        config: MOVEMENT_CONFIG,
-        islands: ISLANDS,
-      }
+      const state = createInitialSimulationState(matchDurationSeconds)
+      const playerSprite = createPlayerSprite(playerTexture)
+      const playerRadiusPreview = createPlayerRadiusPreview()
+      keyboardInput = createKeyboardInput()
 
-      const playerSprite = new Sprite(playerTexture)
-      playerSprite.anchor.set(0.5)
-      playerSprite.width = 48
-      playerSprite.height = 96
       newApp.stage.addChild(playerSprite)
+      newApp.stage.addChild(playerRadiusPreview)
+
+      const timerText = new Text({
+        text: formatTime(matchDurationSeconds),
+        style: {
+          fontFamily: 'Arial',
+          fontSize: 28,
+          fontWeight: 'bold',
+          fill: 0xffffff,
+          stroke: { color: 0x102028, width: 4 },
+        },
+      })
+
+      timerText.position.set(70, 16)
+      newApp.stage.addChild(timerText)
 
       newApp.ticker.add((ticker) => {
+        if (state.isFinished) {
+          return
+        }
+
         const deltaSeconds = Math.min(ticker.deltaMS / 1000, 0.05)
 
-        updateSimulation(state, keyboardInput.read(), deltaSeconds)
+        updateSimulation(state, keyboardInput?.read() ?? {
+          forward: false,
+          turnLeft: false,
+          turnRight: false,
+        }, deltaSeconds)
 
         playerSprite.position.set(state.player.x, state.player.y)
         playerSprite.rotation = state.player.rotation + Math.PI
-
         playerRadiusPreview.position.set(state.player.x, state.player.y)
+
+        const secondsRemaining = Math.max(
+          0,
+          Math.ceil(state.matchDurationSeconds - state.elapsedSeconds),
+        )
+
+        if (secondsRemaining !== lastReportedSeconds) {
+          lastReportedSeconds = secondsRemaining
+          timerText.text = formatTime(secondsRemaining)
+          onTimeUpdate(secondsRemaining)
+        }
+
+        if (state.isFinished && !matchEndReported) {
+          matchEndReported = true
+          onMatchEnd()
+        }
       })
-      const playerRadiusPreview = new Graphics()
-      .circle(0, 0, MOVEMENT_CONFIG.playerRadius)
-      .fill({ color: 0xff0000, alpha: 0.25 })
-      .stroke({ color: 0xff3333, width: 2 })
-
-      playerRadiusPreview.position.set(state.player.x, state.player.y)
-      newApp.stage.addChild(playerRadiusPreview)
-
-      for (const island of state.islands) {
-        const islandGraphic = new Graphics()
-        .circle(0, 0, island.radius)
-        .fill({ color: 0x806b3d })
-        .stroke({ color: 0x4d452e, width: 8 })
-
-        islandGraphic.position.set(island.x, island.y)
-        newApp.stage.addChild(islandGraphic)
-      }
     }
-    
 
     void initializePixi().catch((error: unknown) => {
       console.error('PixiJS initialization failed:', error)
     })
-    
+
     return () => {
       disposed = true
-      keyboardInput.destroy()
+      keyboardInput?.destroy()
       app?.destroy({ removeView: true }, { children: true })
     }
-  }, [])
+  }, [matchDurationSeconds, onTimeUpdate, onMatchEnd])
 
   return <div ref={hostRef} className="pixi-host" />
 }
