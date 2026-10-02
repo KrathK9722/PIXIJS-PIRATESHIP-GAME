@@ -1,8 +1,10 @@
+import PixiGame from '../game/PixiGame'
+
 function GameScreen() {
   return (
     <section>
       <h1>Game</h1>
-      <p>The game will go here.</p>
+      <PixiGame />
     </section>
   )
 }
