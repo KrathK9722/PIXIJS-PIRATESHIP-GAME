@@ -1,11 +1,11 @@
-  .pixi-host {
+.pixi-host {
   width: 100%;
-  aspect-ratio: 16 / 9;
-  min-height: 280px;
-  }
+  height: 100%;
+  min-height: 0;
+}
 
-  .pixi-host canvas {
+.pixi-host canvas {
   display: block;
   width: 100%;
   height: 100%;
-  } 
+} 

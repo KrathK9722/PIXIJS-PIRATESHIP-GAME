@@ -19,7 +19,7 @@ export function loadOptions(): PlayerOptions {
 
     if (
       !('matchDurationSeconds' in parsed) ||
-      !('spawnIntervalSeconds' in parsed)
+      !('spawnIntervalSeconds' in parsed) 
     ) {
       return { ...DEFAULT_OPTIONS }
     }
