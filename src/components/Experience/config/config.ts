@@ -1,8 +1,8 @@
 // ================
 // INITIAL IMPORTS
 // ================
-import type { PlayerOptions } from '../game/types.ts'
-import type { MovementConfig } from './types'
+import type { PlayerOptions } from '../../../types/types.ts'
+import type { MovementConfig } from '../../../types/types.ts'
 
 // ====================
 // SET OPTION'S LIMITS
@@ -55,6 +55,10 @@ export const MOVEMENT_CONFIG: MovementConfig = {
   arenaWidth: 960,
   arenaHeight: 540,
   playerRadius: 24,
+  enemyRadius: 32,
   moveSpeed: 180,
   rotationSpeed: Math.PI,
 }
+
+export const BULLET_SPEED = 400
+export const BULLET_RADIUS = 5

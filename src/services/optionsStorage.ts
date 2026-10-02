@@ -1,5 +1,5 @@
-import { DEFAULT_OPTIONS, validateOptions } from '../game/config'
-import type { PlayerOptions } from '../game/types.ts'
+import { DEFAULT_OPTIONS, validateOptions } from '../components/Experience/config/config.ts'
+import type { PlayerOptions } from '../types/types.ts'
 
 const STORAGE_KEY = 'pirate-battle.options.v1'
 

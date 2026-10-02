@@ -1,8 +1,8 @@
-import PixiGame from '../game/PixiGame'
+import PixiGame from '../Experience/PixiGame'
 import './GameScreen.css'
 import {useState } from 'react'
-import {loadOptions} from '../services/optionsStorage'
-import { formatTime } from '../game/time'
+import {loadOptions} from '../../services/optionsStorage'
+import { formatTime } from '../Experience/config/time'
 
 type GameScreenProps = {
   onMatchEnd: () => void

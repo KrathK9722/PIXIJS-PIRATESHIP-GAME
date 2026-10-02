@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
-import {DEFAULT_OPTIONS,OPTIONS_LIMITS,validateOptions,} from '../game/config'
-import { loadOptions, saveOptions } from '../services/optionsStorage'
+import {DEFAULT_OPTIONS,OPTIONS_LIMITS,validateOptions,} from '../Experience/config/config'
+import { loadOptions, saveOptions } from '../../services/optionsStorage'
 import './OptionsScreen.css'
 
 type OptionsScreenProps = {

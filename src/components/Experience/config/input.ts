@@ -1,13 +1,19 @@
-import type { MovementInput } from './types'
+import type { MovementInput } from '../../../types/types'
 
 export function createKeyboardInput() {
   const pressedKeys = new Set<string>()
+  let shootRequested = false
 
   function handleKeyDown(event: KeyboardEvent) {
     const key = event.key.toLowerCase()
 
-    if (key.startsWith('arrow')) {
+    if (key.startsWith('arrow') || event.code === 'Space') {
       event.preventDefault()
+    }
+
+    // Segurar espaço não cria vários tiros.
+    if (event.code === 'Space' && !event.repeat && !pressedKeys.has(key)) {
+      shootRequested = true
     }
 
     pressedKeys.add(key)
@@ -19,6 +25,7 @@ export function createKeyboardInput() {
 
   function clearPressedKeys() {
     pressedKeys.clear()
+    shootRequested = false
   }
 
   window.addEventListener('keydown', handleKeyDown)
@@ -27,7 +34,10 @@ export function createKeyboardInput() {
 
   return {
     read(): MovementInput {
+      const shoot = shootRequested
+      shootRequested = false
       return {
+        shoot,
         forward: pressedKeys.has('w') || pressedKeys.has('arrowup'),
         turnLeft: pressedKeys.has('a') || pressedKeys.has('arrowleft'),
         turnRight: pressedKeys.has('d') || pressedKeys.has('arrowright'),

@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import './App.css'
-import GameScreen from './screens/GameScreen'
-import ResultScreen from './screens/ResultScreen'
-import OptionsScreen from './screens/OptionsScreen'
-import MainMenu from './screens/MainMenu'
+import GameScreen from './components/Levels/GameScreen'
+import ResultScreen from './components/Levels/ResultScreen'
+import OptionsScreen from './components/Levels/OptionsScreen'
+import MainMenu from './components/Levels/MainMenu'
 
 type Screen = 'menu' | 'options' | 'game' | 'result'
 
