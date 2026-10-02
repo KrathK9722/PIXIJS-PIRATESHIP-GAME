@@ -2,12 +2,12 @@
   width: 320px;
   height: 100px;
   border: 0;
-  background-image: url('/assets/png/default/ui/menu/button_secondary_pressed.png');
+  background-image: url('/assets/png/default/ui/menu/button_primary_normal.png');
   background-size: 100% 100%;
   background-repeat: no-repeat;
   background-position: center;
   background-color: transparent;
-  color: white;
+  color: rgb(0, 0, 0);
   font-size: 20px;
   font-weight: bold;
   cursor: pointer;
@@ -25,7 +25,6 @@
     background-repeat: no-repeat;
     background-position: center;
     justify-content: center;
-    vertical-align: center;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -33,9 +32,23 @@
 }
 
 .menu-button:hover{
-    color: rgb(235, 238, 80);       /* Muda a cor do texto para vermelho */     /* Adiciona um fundo levemente mais claro */
-
+    color: rgb(0, 0, 0);      
+    background-image: url('/assets/png/default/ui/menu/button_primary_hover.png');
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    background-position: center;
+    background-color: transparent;
     transform: translateY(-5px) scale(1.1); 
+}
+
+.menu-button:active{
+    color: rgb(0, 0, 0);       
+    background-image: url('/assets/png/default/ui/menu/button_primary_pressed.png');
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    background-position: center;
+    background-color: transparent;
+    transform: translateY(5px) scale(0.9); 
 }
 
 .main-menu {

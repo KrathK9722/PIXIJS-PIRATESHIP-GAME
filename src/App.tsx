@@ -12,7 +12,7 @@ function App() {
 
   return (
     <main>
-      {screen === 'options' && <OptionsScreen />}
+      {screen === 'options' && (<OptionsScreen onComeBack={() => setScreen('menu')}/>)}
 
       {screen === 'menu' && (<MainMenu onStartGame={() => setScreen('game')} onOpenOptions={() => setScreen('options')}/>)}
 
