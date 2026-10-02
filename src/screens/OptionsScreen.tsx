@@ -58,7 +58,7 @@ function OptionsScreen(props: OptionsScreenProps) {
   return (
     <section className="options-screen">
       <img
-        src="/assets/png/default/ui/menu/title_pirate_battle.png"
+        src="/assets/jungleGaming/png/default/ui/menu/title_pirate_battle.png"
         alt="Pirate Battle"
       />
 

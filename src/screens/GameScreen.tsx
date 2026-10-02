@@ -16,7 +16,7 @@ function GameScreen(props: GameScreenProps) {
 
   return (
     <section className="game-screen">
-      <img src="/assets/png/default/ui/menu/title_pirate_battle.png" alt="Pirate Battle" />
+      <img src="/assets/jungleGaming/png/default/ui/menu/title_pirate_battle.png" alt="Pirate Battle" />
       <p className="visually-hidden" role="timer" aria-live="off">
         Time remaining: {formatTime(secondsRemaining)}
       </p>

@@ -70,8 +70,8 @@ function PixiGame(props: PixiGameProps) {
       const [playerTexture, counterPanelTexture, timeIconTexture] =
         await Promise.all([
           Assets.load<Texture>(PLAYER_TEXTURE_URL),
-          Assets.load<Texture>('/assets/png/default/ui/hud/counter_panel.png'),
-          Assets.load<Texture>('/assets/png/default/ui/hud/icon_time.png'),
+          Assets.load<Texture>('/assets/jungleGaming/png/default/ui/hud/counter_panel.png'),
+          Assets.load<Texture>('/assets/jungleGaming/png/default/ui/hud/icon_time.png'),
         ])
 
       if (disposed) {

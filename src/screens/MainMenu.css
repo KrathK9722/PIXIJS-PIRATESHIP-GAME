@@ -2,7 +2,7 @@
   width: 320px;
   height: 100px;
   border: 0;
-  background-image: url('/assets/png/default/ui/menu/button_primary_normal.png');
+  background-image: url('/assets/jungleGaming/png/default/ui/menu/button_primary_normal.png');
   background-size: 100% 100%;
   background-repeat: no-repeat;
   background-position: center;
@@ -20,7 +20,7 @@
 .menu-options{
     width: min(90vw, 480px);
     aspect-ratio: 384 / 480;
-    background-image: url('/assets/png/default/ui/menu/panel_menu.png');
+    background-image: url('/assets/jungleGaming/png/default/ui/menu/panel_menu.png');
     background-size: 100% 100%;
     background-repeat: no-repeat;
     background-position: center;
@@ -33,7 +33,7 @@
 
 .menu-button:hover{
     color: rgb(0, 0, 0);      
-    background-image: url('/assets/png/default/ui/menu/button_primary_hover.png');
+    background-image: url('/assets/jungleGaming/png/default/ui/menu/button_primary_hover.png');
     background-size: 100% 100%;
     background-repeat: no-repeat;
     background-position: center;
@@ -43,7 +43,7 @@
 
 .menu-button:active{
     color: rgb(0, 0, 0);       
-    background-image: url('/assets/png/default/ui/menu/button_primary_pressed.png');
+    background-image: url('/assets/jungleGaming/png/default/ui/menu/button_primary_pressed.png');
     background-size: 100% 100%;
     background-repeat: no-repeat;
     background-position: center;
@@ -58,7 +58,7 @@
   align-items: center;
   min-height: 100vh;
   gap: 16px;
-  background-image: url('/assets/ui_scene_background.png');
+  background-image: url('/assets/jungleGaming/ui_scene_background.png');
   background-repeat: no-repeat;
   background-position: center;
   background-size: cover;
