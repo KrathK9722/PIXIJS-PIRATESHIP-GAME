@@ -6,8 +6,9 @@ import { updateSimulation } from './simulation'
 import { formatTime } from './time'
 import type { SimulationState } from './types'
 import './PixiGame.css'
+import { createHudCounter } from './hud/createHudCounter'
 
-const PLAYER_TEXTURE_URL = '/assets/png/default/ships/ship_1.png'
+const PLAYER_TEXTURE_URL = '/assets/kenney_piratePack/PNG/Default size/Ships/ship (1).png'
 
 type PixiGameProps = {
   matchDurationSeconds: number
@@ -66,7 +67,12 @@ function PixiGame(props: PixiGameProps) {
         return
       }
 
-      const playerTexture = await Assets.load<Texture>(PLAYER_TEXTURE_URL)
+      const [playerTexture, counterPanelTexture, timeIconTexture] =
+        await Promise.all([
+          Assets.load<Texture>(PLAYER_TEXTURE_URL),
+          Assets.load<Texture>('/assets/png/default/ui/hud/counter_panel.png'),
+          Assets.load<Texture>('/assets/png/default/ui/hud/icon_time.png'),
+        ])
 
       if (disposed) {
         return
@@ -97,19 +103,14 @@ function PixiGame(props: PixiGameProps) {
       newApp.stage.addChild(playerSprite)
       newApp.stage.addChild(playerRadiusPreview)
 
-      const timerText = new Text({
-        text: formatTime(matchDurationSeconds),
-        style: {
-          fontFamily: 'Arial',
-          fontSize: 28,
-          fontWeight: 'bold',
-          fill: 0xffffff,
-          stroke: { color: 0x102028, width: 4 },
-        },
-      })
+      const timeCounter = createHudCounter(
+        counterPanelTexture,
+        timeIconTexture,
+        formatTime(matchDurationSeconds),
+      )
 
-      timerText.position.set(70, 16)
-      newApp.stage.addChild(timerText)
+      timeCounter.container.position.set(24, 16)
+      newApp.stage.addChild(timeCounter.container)
 
       newApp.ticker.add((ticker) => {
         if (state.isFinished) {
@@ -135,7 +136,7 @@ function PixiGame(props: PixiGameProps) {
 
         if (secondsRemaining !== lastReportedSeconds) {
           lastReportedSeconds = secondsRemaining
-          timerText.text = formatTime(secondsRemaining)
+          timeCounter.setValue(formatTime(secondsRemaining))
           onTimeUpdate(secondsRemaining)
         }
 
