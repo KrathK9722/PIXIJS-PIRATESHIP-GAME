@@ -49,10 +49,11 @@ export function updateSimulation(
 
     if (input.shoot) {
         const distanceFromPlayer = 48 + BULLET_RADIUS
+        const spread = (Math.random() - 0.5) * 0.2
         state.bullets.push({
             x: player.x + Math.sin(player.rotation) * distanceFromPlayer,
             y: player.y - Math.cos(player.rotation) * distanceFromPlayer,
-            rotation: player.rotation,
+            rotation: player.rotation + spread,
             lifeTime: 0,
         })
     }
