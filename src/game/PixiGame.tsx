@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { Application, Assets, Graphics, Sprite, Text, Texture } from 'pixi.js'
+import { Application, Assets, Graphics, Sprite, Texture } from 'pixi.js'
 import { MOVEMENT_CONFIG } from './config'
 import { createKeyboardInput } from './input'
 import { updateSimulation } from './simulation'
