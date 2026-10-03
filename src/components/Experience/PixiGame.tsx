@@ -26,6 +26,10 @@ import { createHudHealth } from './config/createHudHealth'
 import type { ExplosionState, MatchResult, SimulationState } from '../../types/types'
 import './PixiGame.css'
 import { createHudCounter } from './config/createHudCounter'
+import { createIslandDisplay } from './config/createIslandDisplay'
+import { ISLAND_TILE_IDS } from './config/island'
+import { createRandomIslands } from './config/createRandomIslands'
+import { getRandomInteger } from './config/random'
 
 const PLAYER_TEXTURE_URLS = Array.from(
   { length: 4 },
@@ -43,22 +47,24 @@ type PixiGameProps = {
   onMatchEnd: (result: MatchResult) => void
 }
 
-export function getRandomInteger(min: number, max: number): number {
-
-  const minCeil = Math.ceil(min);
-  const maxFloor = Math.floor(max);
-  
-  return Math.floor(Math.random() * (maxFloor - minCeil + 1)) + minCeil;
-}
-
 function createInitialSimulationState(
   matchDurationSeconds: number,
   spawnIntervalSeconds: number,
 ): SimulationState {
+  // WHERE THE BOATS START (ISLANDS CAN'T BE PLACED ON TOP OF THESE POINTS)
+  const playerStart = {
+    x: MOVEMENT_CONFIG.arenaWidth / 2,
+    y: MOVEMENT_CONFIG.arenaHeight / 2,
+  }
+  const firstEnemyStart = {
+    x: 48,
+    y: ENEMY_HEIGHT / 2 + 4,
+  }
+
   return {
     player: {
-      x: MOVEMENT_CONFIG.arenaWidth / 2,
-      y: MOVEMENT_CONFIG.arenaHeight / 2,
+      x: playerStart.x,
+      y: playerStart.y,
       rotation: 0,
       health: PLAYER_MAX_HEALTH,
       alive: true,
@@ -69,8 +75,8 @@ function createInitialSimulationState(
     enemies: [{
       id: 1,
       type: 'chaser',
-      x: 48,
-      y: ENEMY_HEIGHT / 2 + 4,
+      x: firstEnemyStart.x,
+      y: firstEnemyStart.y,
       rotation: 0,
       health: ENEMY_MAX_HEALTH,
       boatColor: getRandomInteger(3, 6),
@@ -78,6 +84,11 @@ function createInitialSimulationState(
       shootCooldown: ENEMY_SHOOT_INTERVAL_SECONDS,
       deathElapsedSeconds: null,
     }],
+    islands: createRandomIslands(
+      MOVEMENT_CONFIG.arenaWidth,
+      MOVEMENT_CONFIG.arenaHeight,
+      [playerStart, firstEnemyStart],
+    ),
     nextEnemyId: 2,
     spawnElapsedSeconds: 0,
     spawnIntervalSeconds,
@@ -239,6 +250,7 @@ function PixiGame(props: PixiGameProps) {
         heartTexture,
         bulletTexture,
         enemyTextures,
+        islandTileTextures,
         explosionTextures,
       ] = await Promise.all([
         Promise.all(PLAYER_TEXTURE_URLS.map((url) => Assets.load<Texture>(url))),
@@ -263,6 +275,9 @@ function PixiGame(props: PixiGameProps) {
             ),
           )),
         )),
+        Promise.all(ISLAND_TILE_IDS.map((tileId) => Assets.load<Texture>(
+          `/assets/kenney_piratePack/PNG/Default size/Tiles/tile_${String(tileId).padStart(2, '0')}.png`,
+        ))),
         Promise.all([
           Assets.load<Texture>('/assets/kenney_piratePack/PNG/Default size/Effects/explosion3.png'),
           Assets.load<Texture>('/assets/kenney_piratePack/PNG/Default size/Effects/explosion2.png'),
@@ -294,6 +309,31 @@ function PixiGame(props: PixiGameProps) {
       // CONTAINER
       const worldContainer = new Container()
       newApp.stage.addChild(worldContainer)
+      const islandTextureMap = new Map(
+        ISLAND_TILE_IDS.map((tileId, index) => [tileId, islandTileTextures[index]]),
+      )
+      worldContainer.addChild(createIslandDisplay(
+        islandTextureMap,
+        MOVEMENT_CONFIG.arenaWidth,
+        MOVEMENT_CONFIG.arenaHeight,
+        state.islands,
+      ))
+      const islandCollisionPreview = new Graphics()
+      // DRAW THE ISLAND HITBOX (ROUNDRECT) FOR DEBUG
+      for (const island of state.islands) {
+        islandCollisionPreview
+          .roundRect(
+            island.hitBox.x,
+            island.hitBox.y,
+            island.hitBox.width,
+            island.hitBox.height,
+            island.hitBox.cornerRadius,
+          )
+          .fill({ color: 0xff3030, alpha: 0.22 })
+          .stroke({ color: 0xff3030, width: 2 })
+      }
+      islandCollisionPreview.visible = debugEnabledRef.current
+      worldContainer.addChild(islandCollisionPreview)
 
       const shakeDuration = 0.25
       let shakeRemaining = 0
@@ -545,6 +585,7 @@ function PixiGame(props: PixiGameProps) {
         }
 
         // ENEMIES
+        islandCollisionPreview.visible = debugEnabledRef.current
         const activeEnemyIds = new Set(state.enemies.map((enemy) => enemy.id))
         for (const [enemyId, view] of enemyViews) {
           if (activeEnemyIds.has(enemyId)) continue

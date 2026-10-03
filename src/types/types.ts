@@ -53,6 +53,7 @@ export type MovementConfig = {
 export type SimulationState = {
   player: PlayerState
   config: MovementConfig
+  islands: IslandState[]
   enemies: EnemyState[]
   nextEnemyId: number
   spawnElapsedSeconds: number
@@ -66,6 +67,21 @@ export type SimulationState = {
   matchDurationSeconds: number
   isFinished: boolean
   finishReason: MatchFinishReason | null
+}
+
+export type IslandState = {
+  x: number
+  y: number
+  hitBox: RoundRectHitBox
+  decorationTiles: Array<Array<number | null>>
+}
+
+export type RoundRectHitBox = {
+  x: number
+  y: number
+  width: number
+  height: number
+  cornerRadius: number
 }
 
 export type MatchFinishReason = 'time' | 'player_destroyed'

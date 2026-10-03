@@ -1,6 +1,6 @@
 import PixiGame from '../Experience/PixiGame'
 import './GameScreen.css'
-import {useState } from 'react'
+import { useEffect, useState } from 'react'
 import {loadOptions} from '../../services/optionsStorage'
 import { formatTime } from '../Experience/config/time'
 import OptionsScreen from './OptionsScreen'
@@ -18,6 +18,28 @@ function GameScreen(props: GameScreenProps) {
   const [secondsRemaining, setSecondsRemaining] = useState(
     matchOptions.matchDurationSeconds,
   )
+
+  // PAUSE THE GAME WHEN THE PLAYER LEAVES THE SCREEN (ALT+TAB, OTHER TAB, MINIMIZE)
+  useEffect(() => {
+    function pauseGame() {
+      setIsPaused(true)
+    }
+
+    function pauseWhenTabIsHidden() {
+      if (document.hidden) {
+        setIsPaused(true)
+      }
+    }
+
+    window.addEventListener('blur', pauseGame)
+    document.addEventListener('visibilitychange', pauseWhenTabIsHidden)
+
+    // REMOVE THE LISTENERS WHEN LEAVING THE GAME SCREEN
+    return () => {
+      window.removeEventListener('blur', pauseGame)
+      document.removeEventListener('visibilitychange', pauseWhenTabIsHidden)
+    }
+  }, [])
 
   return (
     <section className="game-screen">

@@ -24,9 +24,9 @@ The ranking/history API, Query hooks, and MSW handlers are not implemented yet.
 - A Chaser begins each match and moves toward the player. It explodes on hull contact, deals 3 damage, and awards no points.
 - Enemies spawn using the saved spawn interval. Spawn types alternate between Shooter and Chaser. Spawns prefer arena edge positions at least 220 logical pixels from the player.
 - Shooters move toward the player until they reach their preferred distance, then hold position or back away. They fire aimed projectiles inside a 320 pixel range, with a 1.5 second cooldown.
+- The arena uses the Kenney 64 × 64 tile images. A 5 × 5 visual map layers seabed, sand, grass, and decorations; a matching solid-cell map blocks player/enemy movement and swept projectile paths. Debug mode overlays the solid cells.
 - Each enemy has 3 health. Player projectiles remove one health; destroying an enemy awards one point. Shooter hulls use base sprite 2. Chasers choose base sprite 3 through 6. Both keep their hull color when switching to damage textures.
 - Enemy entities live in `SimulationState.enemies`; Pixi maintains one reusable render view per entity and removes its display objects after the destruction animation.
-- The simulation currently has no island obstacles. Island movement and projectile collision are a later stage.
 
 ## Persistence and Lifecycle
 

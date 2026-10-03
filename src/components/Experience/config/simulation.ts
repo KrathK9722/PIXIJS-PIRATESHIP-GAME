@@ -1,4 +1,4 @@
-import type { BulletState, EnemyState, MovementInput, SimulationState } from '../../../types/types'
+import type { BulletState, EnemyState, IslandState, MovementInput, RoundRectHitBox, SimulationState } from '../../../types/types'
 import {
   BULLET_RADIUS, BULLET_SPEED, ENEMY_CHASER_SPEED, ENEMY_COLLISION_DAMAGE,
   ENEMY_HEIGHT, ENEMY_MAX_HEALTH, ENEMY_ROTATION_SPEED, ENEMY_SHOOTER_PREFERRED_DISTANCE,
@@ -228,6 +228,262 @@ function wrapAngle(angle: number): number {
   return Math.atan2(Math.sin(angle), Math.cos(angle))
 }
 
+// A ROUNDRECT IS THE SAME AS A SMALLER RECTANGLE (THE "CORE")
+// WITH A BORDER OF SIZE cornerRadius AROUND IT.
+// THIS FUNCTION FINDS THE POINT OF THE CORE THAT IS CLOSEST TO (x, y)
+function getClosestPointOnIslandCore(x: number, y: number, hitBox: RoundRectHitBox): Point {
+  const coreLeft = hitBox.x + hitBox.cornerRadius
+  const coreRight = hitBox.x + hitBox.width - hitBox.cornerRadius
+  const coreTop = hitBox.y + hitBox.cornerRadius
+  const coreBottom = hitBox.y + hitBox.height - hitBox.cornerRadius
+
+  return {
+    x: Math.max(coreLeft, Math.min(coreRight, x)),
+    y: Math.max(coreTop, Math.min(coreBottom, y)),
+  }
+}
+
+// CHECK IF A CIRCLE TOUCHES THE ISLAND HITBOX (ROUNDRECT)
+export function circleOverlapsIsland(
+  x: number,
+  y: number,
+  radius: number,
+  island: IslandState,
+): boolean {
+  const closestPoint = getClosestPointOnIslandCore(x, y, island.hitBox)
+  const distance = Math.hypot(x - closestPoint.x, y - closestPoint.y)
+  return distance < radius + island.hitBox.cornerRadius
+}
+
+// CHECK IF A CIRCLE TOUCHES THE LAND OF ANY ISLAND
+function circleOverlapsAnyIsland(
+  x: number,
+  y: number,
+  radius: number,
+  islands: IslandState[],
+): boolean {
+  for (const island of islands) {
+    if (circleOverlapsIsland(x, y, radius, island)) return true
+  }
+  return false
+}
+
+// HOW MUCH A CIRCLE MUST MOVE TO GET OUT OF THE ISLAND (0, 0 = IT'S NOT TOUCHING)
+function getIslandPushForCircle(
+  x: number,
+  y: number,
+  radius: number,
+  island: IslandState,
+): Point {
+  const hitBox = island.hitBox
+  const closestPoint = getClosestPointOnIslandCore(x, y, hitBox)
+  const differenceX = x - closestPoint.x
+  const differenceY = y - closestPoint.y
+  const distance = Math.hypot(differenceX, differenceY)
+  const minimumDistance = radius + hitBox.cornerRadius
+
+  if (distance >= minimumDistance) {
+    return { x: 0, y: 0 }
+  }
+
+  let normalX: number
+  let normalY: number
+
+  if (distance > 0.000001) {
+    normalX = differenceX / distance
+    normalY = differenceY / distance
+  } else {
+    // THE CIRCLE IS DEEP INSIDE THE ISLAND: PUSH IT AWAY FROM THE ISLAND CENTER
+    const centerDifferenceX = x - (hitBox.x + hitBox.width / 2)
+    const centerDifferenceY = y - (hitBox.y + hitBox.height / 2)
+    const centerDistance = Math.hypot(centerDifferenceX, centerDifferenceY)
+
+    if (centerDistance > 0.000001) {
+      normalX = centerDifferenceX / centerDistance
+      normalY = centerDifferenceY / centerDistance
+    } else {
+      normalX = 1
+      normalY = 0
+    }
+  }
+
+  const overlap = minimumDistance - distance
+  return { x: normalX * overlap, y: normalY * overlap }
+}
+
+// PUSH THE BOAT CAPSULE (YELLOW HITBOX) OUT OF ALL ISLANDS
+// WE PUT 5 CIRCLES ALONG THE BOAT (BACK, MIDDLE AND FRONT) TO MAKE THE CAPSULE SHAPE
+// AND PUSH THE BOAT BY THE CIRCLE THAT IS DEEPEST INSIDE THE ISLAND
+function pushBoatOutOfIslands(
+  boat: { x: number; y: number; rotation: number },
+  width: number,
+  height: number,
+  islands: IslandState[],
+): void {
+  const radius = width / 2
+  const circlePositions = [0, 0.25, 0.5, 0.75, 1]
+
+  // REPEAT A FEW TIMES BECAUSE ONE PUSH CAN LEAVE ANOTHER CIRCLE STILL A LITTLE INSIDE
+  for (let attempt = 0; attempt < 3; attempt++) {
+    for (const island of islands) {
+      const segment = getCapsuleSegment(boat, width, height)
+      let biggestPush = { x: 0, y: 0 }
+
+      for (const position of circlePositions) {
+        const circleX = segment.start.x + (segment.end.x - segment.start.x) * position
+        const circleY = segment.start.y + (segment.end.y - segment.start.y) * position
+        const push = getIslandPushForCircle(circleX, circleY, radius, island)
+
+        if (Math.hypot(push.x, push.y) > Math.hypot(biggestPush.x, biggestPush.y)) {
+          biggestPush = push
+        }
+      }
+
+      boat.x += biggestPush.x
+      boat.y += biggestPush.y
+    }
+  }
+}
+
+// CLOSEST POINT OF A LINE (FROM start TO end) TO ANOTHER POINT
+function getClosestPointOnSegment(start: Point, end: Point, point: Point): Point {
+  const segmentX = end.x - start.x
+  const segmentY = end.y - start.y
+  const lengthSquared = segmentX ** 2 + segmentY ** 2
+
+  if (lengthSquared <= 0.000001) {
+    return start
+  }
+
+  const amount = clamp01(
+    ((point.x - start.x) * segmentX + (point.y - start.y) * segmentY) / lengthSquared,
+  )
+  return {
+    x: start.x + segmentX * amount,
+    y: start.y + segmentY * amount,
+  }
+}
+
+// WHERE THE ENEMY SHOULD GO:
+// IF AN ISLAND IS BETWEEN THE ENEMY AND THE PLAYER, GO TO A POINT BESIDE THE ISLAND (GO AROUND IT).
+// OTHERWISE, GO STRAIGHT TO THE PLAYER
+function getEnemyTarget(
+  enemy: { x: number; y: number },
+  player: { x: number; y: number },
+  islands: IslandState[],
+  arenaWidth: number,
+  arenaHeight: number,
+): Point {
+  for (const island of islands) {
+    const hitBox = island.hitBox
+    const islandCenter = {
+      x: hitBox.x + hitBox.width / 2,
+      y: hitBox.y + hitBox.height / 2,
+    }
+
+    // IS THE ISLAND IN THE WAY? (THE LINE ENEMY -> PLAYER PASSES THROUGH IT)
+    const closestPointOnPath = getClosestPointOnSegment(enemy, player, islandCenter)
+    const islandIsInTheWay = circleOverlapsIsland(
+      closestPointOnPath.x,
+      closestPointOnPath.y,
+      ENEMY_WIDTH / 2,
+      island,
+    )
+    if (!islandIsInTheWay) continue
+
+    // DIRECTION TO THE PLAYER AND THE DIRECTION TO THE SIDE (90 DEGREES)
+    const distanceToPlayer = Math.max(0.001, Math.hypot(player.x - enemy.x, player.y - enemy.y))
+    const directionX = (player.x - enemy.x) / distanceToPlayer
+    const directionY = (player.y - enemy.y) / distanceToPlayer
+    const sideX = -directionY
+    const sideY = directionX
+
+    // CHOOSE THE SIDE OF THE ISLAND THAT IS CLOSER TO THE PATH
+    const pathSide =
+      (closestPointOnPath.x - islandCenter.x) * sideX +
+      (closestPointOnPath.y - islandCenter.y) * sideY
+    let side = pathSide >= 0 ? 1 : -1
+
+    // HOW FAR FROM THE ISLAND CENTER THE ENEMY SHOULD PASS
+    const islandRadius = Math.hypot(hitBox.width, hitBox.height) / 2
+    const passDistance = islandRadius + ENEMY_HEIGHT / 2
+
+    let targetX = islandCenter.x + sideX * side * passDistance
+    let targetY = islandCenter.y + sideY * side * passDistance
+
+    // IF THAT SIDE IS OUTSIDE THE ARENA (ISLAND NEAR THE EDGE), USE THE OTHER SIDE
+    const isOutsideArena = targetX < 0 || targetX > arenaWidth || targetY < 0 || targetY > arenaHeight
+    if (isOutsideArena) {
+      side = -side
+      targetX = islandCenter.x + sideX * side * passDistance
+      targetY = islandCenter.y + sideY * side * passDistance
+    }
+
+    return { x: targetX, y: targetY }
+  }
+
+  return { x: player.x, y: player.y }
+}
+
+// CHECK IF A POINT IS INSIDE THE BOAT HURTBOX (RED RECTANGLE)
+function pointInsideHurtBox(
+  point: Point,
+  boat: { x: number; y: number; rotation: number },
+  width: number,
+  height: number,
+): boolean {
+  const dx = point.x - boat.x
+  const dy = point.y - boat.y
+  const cos = Math.cos(boat.rotation)
+  const sin = Math.sin(boat.rotation)
+
+  const localX = dx * cos + dy * sin
+  const localY = -dx * sin + dy * cos
+
+  return Math.abs(localX) <= width / 2 && Math.abs(localY) <= height / 2
+}
+
+// GET THE 4 CORNERS AND THE 4 MIDDLE OF SIDES OF THE BOAT HURTBOX
+function getHurtBoxPoints(
+  boat: { x: number; y: number; rotation: number },
+  width: number,
+  height: number,
+): Point[] {
+  const halfWidth = width / 2
+  const halfHeight = height / 2
+  const localPoints = [
+    { x: -halfWidth, y: -halfHeight }, { x: halfWidth, y: -halfHeight },
+    { x: halfWidth, y: halfHeight }, { x: -halfWidth, y: halfHeight },
+    { x: 0, y: -halfHeight }, { x: halfWidth, y: 0 },
+    { x: 0, y: halfHeight }, { x: -halfWidth, y: 0 },
+  ]
+  const cos = Math.cos(boat.rotation)
+  const sin = Math.sin(boat.rotation)
+  const worldPoints: Point[] = []
+
+  for (const localPoint of localPoints) {
+    worldPoints.push({
+      x: boat.x + localPoint.x * cos - localPoint.y * sin,
+      y: boat.y + localPoint.x * sin + localPoint.y * cos,
+    })
+  }
+  return worldPoints
+}
+
+// CHECK IF THE PLAYER HURTBOX TOUCHES THE ENEMY HURTBOX (USED ONLY FOR DAMAGE)
+function hurtBoxesOverlap(
+  player: { x: number; y: number; rotation: number },
+  enemy: { x: number; y: number; rotation: number },
+): boolean {
+  for (const point of getHurtBoxPoints(player, PLAYER_WIDTH, PLAYER_HEIGHT)) {
+    if (pointInsideHurtBox(point, enemy, ENEMY_WIDTH, ENEMY_HEIGHT)) return true
+  }
+  for (const point of getHurtBoxPoints(enemy, ENEMY_WIDTH, ENEMY_HEIGHT)) {
+    if (pointInsideHurtBox(point, player, PLAYER_WIDTH, PLAYER_HEIGHT)) return true
+  }
+  return false
+}
+
 function createEnemy(state: SimulationState, type: EnemyState['type']): EnemyState {
   const { arenaWidth, arenaHeight } = state.config
   const spawnPoints = [
@@ -236,10 +492,15 @@ function createEnemy(state: SimulationState, type: EnemyState['type']): EnemySta
     { x: 48, y: arenaHeight - 48 }, { x: arenaWidth / 2, y: arenaHeight - 40 },
     { x: arenaWidth - 48, y: arenaHeight - 48 },
   ]
-  const safePoints = spawnPoints.filter((point) =>
+  const islandSafePoints = spawnPoints.filter((point) =>
+    !circleOverlapsAnyIsland(point.x, point.y, ENEMY_HEIGHT / 2, state.islands),
+  )
+  const safePoints = islandSafePoints.filter((point) =>
     Math.hypot(point.x - state.player.x, point.y - state.player.y) >= ENEMY_SPAWN_SAFE_DISTANCE,
   )
-  const candidates = safePoints.length > 0 ? safePoints : spawnPoints
+  const candidates = safePoints.length > 0
+    ? safePoints
+    : islandSafePoints.length > 0 ? islandSafePoints : spawnPoints
   const spawn = candidates.reduce((farthest, point) =>
     Math.hypot(point.x - state.player.x, point.y - state.player.y) >
       Math.hypot(farthest.x - state.player.x, farthest.y - state.player.y) ? point : farthest,
@@ -329,6 +590,8 @@ export function updateSimulation(
       player.x += Math.sin(player.rotation) * config.moveSpeed * deltaSeconds
       player.y -= Math.cos(player.rotation) * config.moveSpeed * deltaSeconds
     }
+    // MOVE AND TURN FREELY, THEN PUSH THE BOAT OUT IF IT WENT INTO AN ISLAND
+    pushBoatOutOfIslands(player, PLAYER_WIDTH, PLAYER_HEIGHT, state.islands)
     player.x = Math.max(config.playerRadius, Math.min(config.arenaWidth - config.playerRadius, player.x))
     player.y = Math.max(config.playerRadius, Math.min(config.arenaHeight - config.playerRadius, player.y))
     player.shootCooldown = Math.max(0, player.shootCooldown - deltaSeconds)
@@ -371,7 +634,11 @@ export function updateSimulation(
     const dx = player.x - enemy.x
     const dy = player.y - enemy.y
     const distance = Math.max(0.001, Math.hypot(dx, dy))
-    const targetRotation = Math.atan2(dx, -dy)
+
+    // AIM AT THE PLAYER, OR AT A POINT BESIDE THE ISLAND IF IT IS IN THE WAY
+    const target = getEnemyTarget(enemy, player, state.islands, config.arenaWidth, config.arenaHeight)
+    const isGoingAroundIsland = target.x !== player.x || target.y !== player.y
+    const targetRotation = Math.atan2(target.x - enemy.x, -(target.y - enemy.y))
     const rotationDelta = wrapAngle(targetRotation - enemy.rotation)
     enemy.rotation += Math.max(
       -ENEMY_ROTATION_SPEED * deltaSeconds,
@@ -379,7 +646,7 @@ export function updateSimulation(
     )
 
     let movementDirection = 0
-    if (enemy.type === 'chaser') {
+    if (enemy.type === 'chaser' || isGoingAroundIsland) {
       movementDirection = 1
     } else if (distance > ENEMY_SHOOTER_PREFERRED_DISTANCE + 12) {
       movementDirection = 1
@@ -390,6 +657,7 @@ export function updateSimulation(
     const speed = enemy.type === 'chaser' ? ENEMY_CHASER_SPEED : ENEMY_SHOOTER_SPEED
     enemy.x += Math.sin(enemy.rotation) * speed * movementDirection * deltaSeconds
     enemy.y -= Math.cos(enemy.rotation) * speed * movementDirection * deltaSeconds
+    pushBoatOutOfIslands(enemy, ENEMY_WIDTH, ENEMY_HEIGHT, state.islands)
     enemy.x = Math.max(config.enemyRadius, Math.min(config.arenaWidth - config.enemyRadius, enemy.x))
     enemy.y = Math.max(config.enemyRadius, Math.min(config.arenaHeight - config.enemyRadius, enemy.y))
 
@@ -407,12 +675,20 @@ export function updateSimulation(
       }
     }
 
-    if (separateBoatCapsules(player, enemy) && enemy.type === 'chaser') {
+    // HURTBOX (RED) = DAMAGE. CHECK IT BEFORE THE BOATS ARE PUSHED APART
+    const touchedHurtBox = hurtBoxesOverlap(player, enemy)
+
+    // HITBOX (YELLOW CAPSULE) = COLLISION. ONLY PUSHES THE BOATS APART
+    separateBoatCapsules(player, enemy)
+
+    if (touchedHurtBox && enemy.type === 'chaser') {
       damagePlayer(state, ENEMY_COLLISION_DAMAGE)
       destroyEnemy(state, enemy, false)
     }
   }
 
+  // AN ENEMY CAN PUSH THE PLAYER INTO AN ISLAND, SO PUSH THE PLAYER OUT AGAIN
+  pushBoatOutOfIslands(player, PLAYER_WIDTH, PLAYER_HEIGHT, state.islands)
   player.x = Math.max(config.playerRadius, Math.min(config.arenaWidth - config.playerRadius, player.x))
   player.y = Math.max(config.playerRadius, Math.min(config.arenaHeight - config.playerRadius, player.y))
 
@@ -438,6 +714,13 @@ export function updateSimulation(
     const outOfBounds = bullet.x < -BULLET_RADIUS || bullet.x > config.arenaWidth + BULLET_RADIUS ||
       bullet.y < -BULLET_RADIUS || bullet.y > config.arenaHeight + BULLET_RADIUS
     if (bullet.lifeTime >= 1 || outOfBounds) {
+      state.ripples.push({ x: bullet.x, y: bullet.y, age: 0 })
+      state.bullets.splice(index, 1)
+      continue
+    }
+
+    // BULLET HITS THE ISLAND HITBOX (ROUNDRECT)
+    if (circleOverlapsAnyIsland(bullet.x, bullet.y, BULLET_RADIUS, state.islands)) {
       state.ripples.push({ x: bullet.x, y: bullet.y, age: 0 })
       state.bullets.splice(index, 1)
       continue
