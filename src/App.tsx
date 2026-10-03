@@ -4,11 +4,15 @@ import GameScreen from './components/Levels/GameScreen'
 import ResultScreen from './components/Levels/ResultScreen'
 import OptionsScreen from './components/Levels/OptionsScreen'
 import MainMenu from './components/Levels/MainMenu'
+import type { MatchResult } from './types/types'
+import { saveLatestResult } from './services/resultStorage'
 
 type Screen = 'menu' | 'options' | 'game' | 'result'
 
 function App() {
   const [screen, setScreen] = useState<Screen>('menu')
+  const [latestResult, setLatestResult] = useState<MatchResult | null>(null)
+  const [resultSavedLocally, setResultSavedLocally] = useState(true)
 
   return (
     <main>
@@ -18,12 +22,23 @@ function App() {
 
       {screen === 'game' && (
         <GameScreen
-          onMatchEnd={() => setScreen('result')}
+          onMatchEnd={(result) => {
+            setResultSavedLocally(saveLatestResult(result))
+            setLatestResult(result)
+            setScreen('result')
+          }}
           onReturnToMenu={() => setScreen('menu')}
         />
       )}
 
-      {screen === 'result' && <ResultScreen />}
+      {screen === 'result' && latestResult !== null && (
+        <ResultScreen
+          result={latestResult}
+          isSavedLocally={resultSavedLocally}
+          onPlayAgain={() => setScreen('game')}
+          onReturnToMenu={() => setScreen('menu')}
+        />
+      )}
     </main>
   )
 }

@@ -1,0 +1,104 @@
+.result-screen {
+  box-sizing: border-box;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  padding: 24px 16px;
+  background-image: url('/assets/jungleGaming/ui_scene_background.png');
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: cover;
+}
+
+.result-title-art {
+  width: min(78vw, 430px);
+  height: auto;
+}
+
+.result-panel {
+  box-sizing: border-box;
+  width: min(92vw, 480px);
+  min-height: 460px;
+  padding: 58px 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  color: #fff1c4;
+  text-align: center;
+  background-image: url('/assets/jungleGaming/png/default/ui/menu/panel_menu.png');
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+}
+
+.result-panel h1 {
+  margin: 0;
+  font-size: 32px;
+}
+
+.result-summary {
+  width: 100%;
+  margin: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.result-summary div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgb(255 241 196 / 40%);
+}
+
+.result-summary dt {
+  font-weight: 600;
+}
+
+.result-summary dd {
+  margin: 0;
+}
+
+.result-save-status {
+  margin: 0;
+  font-size: 14px;
+}
+
+.result-actions {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin-top: auto;
+}
+
+.result-button {
+  width: min(100%, 320px);
+  height: 68px;
+  border: 0;
+  background: url('/assets/jungleGaming/png/default/ui/menu/button_primary_normal.png') center / 100% 100% no-repeat;
+  color: #21180c;
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.result-button:hover,
+.result-button:focus-visible {
+  background-image: url('/assets/jungleGaming/png/default/ui/menu/button_primary_hover.png');
+}
+
+.result-button:active {
+  background-image: url('/assets/jungleGaming/png/default/ui/menu/button_primary_pressed.png');
+}
+
+@media (max-width: 520px) {
+  .result-panel {
+    min-height: 420px;
+    padding: 48px 34px;
+  }
+}

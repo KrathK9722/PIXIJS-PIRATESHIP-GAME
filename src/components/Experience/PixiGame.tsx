@@ -15,6 +15,7 @@ import {
   PLAYER_HEIGHT,
   PLAYER_MAX_HEALTH,
   PLAYER_WIDTH,
+  DEFAULT_OPTIONS,
   ENEMY_MAX_HEALTH,
   ENEMY_SHOOT_INTERVAL_SECONDS,
 } from './config/config'
@@ -22,7 +23,7 @@ import { createKeyboardInput } from './config/input'
 import { updateSimulation } from './config/simulation'
 import { formatTime } from './config/time'
 import { createHudHealth } from './config/createHudHealth'
-import type { ExplosionState, SimulationState } from '../../types/types'
+import type { ExplosionState, MatchResult, SimulationState } from '../../types/types'
 import './PixiGame.css'
 import { createHudCounter } from './config/createHudCounter'
 
@@ -34,11 +35,12 @@ const PLAYER_TEXTURE_URLS = Array.from(
 
 type PixiGameProps = {
   matchDurationSeconds: number
+  spawnIntervalSeconds: number
   debugEnabled: boolean
   isPaused: boolean
   onPause: (paused: boolean) => void
   onTimeUpdate: (secondsRemaining: number) => void
-  onMatchEnd: () => void
+  onMatchEnd: (result: MatchResult) => void
 }
 
 export function getRandomInteger(min: number, max: number): number {
@@ -49,7 +51,10 @@ export function getRandomInteger(min: number, max: number): number {
   return Math.floor(Math.random() * (maxFloor - minCeil + 1)) + minCeil;
 }
 
-function createInitialSimulationState(matchDurationSeconds: number): SimulationState {
+function createInitialSimulationState(
+  matchDurationSeconds: number,
+  spawnIntervalSeconds: number,
+): SimulationState {
   return {
     player: {
       x: MOVEMENT_CONFIG.arenaWidth / 2,
@@ -61,16 +66,21 @@ function createInitialSimulationState(matchDurationSeconds: number): SimulationS
       shootCooldown: 0,
       deathElapsedSeconds: null,
     },
-    enemy: {
-      x: MOVEMENT_CONFIG.arenaWidth / 2,
-      y: 120,
+    enemies: [{
+      id: 1,
+      type: 'chaser',
+      x: 48,
+      y: ENEMY_HEIGHT / 2 + 4,
       rotation: 0,
       health: ENEMY_MAX_HEALTH,
-      boatColor: getRandomInteger(2,6),
+      boatColor: getRandomInteger(3, 6),
       alive: true,
       shootCooldown: ENEMY_SHOOT_INTERVAL_SECONDS,
       deathElapsedSeconds: null,
-    },
+    }],
+    nextEnemyId: 2,
+    spawnElapsedSeconds: 0,
+    spawnIntervalSeconds,
     bullets: [],
     ripples: [],
     explosions: [],
@@ -80,6 +90,29 @@ function createInitialSimulationState(matchDurationSeconds: number): SimulationS
     elapsedSeconds: 0,
     matchDurationSeconds,
     isFinished: false,
+    finishReason: null,
+  }
+}
+
+function createMatchResult(
+  state: SimulationState,
+  matchDurationSeconds: number,
+  spawnIntervalSeconds: number,
+  debugEnabled: boolean,
+): MatchResult {
+  return {
+    matchId: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`,
+    playerId: 'local-player',
+    completedAt: new Date().toISOString(),
+    score: state.score,
+    durationSeconds: Math.floor(state.elapsedSeconds),
+    finishReason: state.finishReason ?? 'time',
+    configuration: {
+      ...DEFAULT_OPTIONS,
+      matchDurationSeconds,
+      spawnIntervalSeconds,
+      debugEnabled,
+    },
   }
 }
 
@@ -151,6 +184,7 @@ function createEnemyHitBoxPreview(): Graphics {
 function PixiGame(props: PixiGameProps) {
   const hostRef = useRef<HTMLDivElement | null>(null)
   const matchDurationSeconds = props.matchDurationSeconds
+  const spawnIntervalSeconds = props.spawnIntervalSeconds
   const debugEnabled = props.debugEnabled
   const isPaused = props.isPaused
   const onPause = props.onPause
@@ -185,18 +219,9 @@ function PixiGame(props: PixiGameProps) {
       if (host === null) {
         return
       }
-      const state = createInitialSimulationState(matchDurationSeconds)
+      const state = createInitialSimulationState(matchDurationSeconds, spawnIntervalSeconds)
 
-      if (state.enemy === null) {
-        return
-      }
-
-      const enemyBoatColor = state.enemy.boatColor
-      const enemyTextureURLs = Array.from(
-        { length: 4 },
-        (_, damageState) =>
-          `/assets/kenney_piratePack/PNG/Default size/Ships/ship (${enemyBoatColor + damageState * 6}).png`,
-      )
+      const enemyTextureColors = [2, 3, 4, 5, 6]
 
       const [
         playerTextures,
@@ -230,7 +255,14 @@ function PixiGame(props: PixiGameProps) {
         Assets.load<Texture>('/assets/jungleGaming/png/default/ui/hud/health_fill_red.png'),
         Assets.load<Texture>('/assets/jungleGaming/png/default/ui/hud/icon_heart.png'),
         Assets.load<Texture>('/assets/kenney_piratePack/PNG/Default size/Ship parts/cannonBall.png'),
-        Promise.all(enemyTextureURLs.map((url) => Assets.load<Texture>(url))),
+        Promise.all(enemyTextureColors.map((boatColor) =>
+          Promise.all(Array.from(
+            { length: 4 },
+            (_, damageState) => Assets.load<Texture>(
+              `/assets/kenney_piratePack/PNG/Default size/Ships/ship (${boatColor + damageState * 6}).png`,
+            ),
+          )),
+        )),
         Promise.all([
           Assets.load<Texture>('/assets/kenney_piratePack/PNG/Default size/Effects/explosion3.png'),
           Assets.load<Texture>('/assets/kenney_piratePack/PNG/Default size/Effects/explosion2.png'),
@@ -298,16 +330,12 @@ function PixiGame(props: PixiGameProps) {
       worldContainer.addChild(playerHitBoxPreview)
 
       // CREATE ENEMY ON CANVAS
-      const enemySprite = createEnemySprite(enemyTextures[0])
-      const enemyHurtBoxPreview = createEnemyHurtBoxPreview()
-      const enemyHitBoxPreview = createEnemyHitBoxPreview()
-      enemyHurtBoxPreview.position.set(state.enemy.x, state.enemy.y)
-      enemyHurtBoxPreview.rotation = state.enemy.rotation + Math.PI
-      enemyHitBoxPreview.position.set(state.enemy.x, state.enemy.y)
-      enemyHitBoxPreview.rotation = state.enemy.rotation + Math.PI
-      worldContainer.addChild(enemySprite)
-      worldContainer.addChild(enemyHurtBoxPreview)
-      worldContainer.addChild(enemyHitBoxPreview)
+      const enemyViews = new Map<number, {
+        sprite: Sprite
+        hurtBox: Graphics
+        hitBox: Graphics
+        healthBar: Graphics
+      }>()
 
       // CREATE TIMER ON CANVAS
       const timeCounter = createHudCounter(
@@ -398,7 +426,7 @@ function PixiGame(props: PixiGameProps) {
         if (state.isFinished) {
           if (!matchEndReported) {
             matchEndReported = true
-            onMatchEnd()
+            onMatchEnd(createMatchResult(state, matchDurationSeconds, spawnIntervalSeconds, debugEnabledRef.current))
           }
           return
         }
@@ -408,7 +436,9 @@ function PixiGame(props: PixiGameProps) {
 
         // SAVE PLAYER AND ENEMY HEALTH BEFORE UPDATE
         const playerHealthBefore = state.player.health
-        const enemyHealthBefore = state.enemy?.health
+        const enemyHealthBefore = new Map(
+          state.enemies.map((enemy) => [enemy.id, enemy.health]),
+        )
         
         updateSimulation(state, keyboardInput?.read() ?? {
           forward: false,
@@ -427,12 +457,11 @@ function PixiGame(props: PixiGameProps) {
           triggerScreenShake(state.player.health === 0 ? 12 : 4)
         }
 
-        if (
-          state.enemy !== null &&
-          enemyHealthBefore !== undefined &&
-          state.enemy.health < enemyHealthBefore
-        ) {
-          triggerScreenShake(state.enemy.health === 0 ? 12 : 4)
+        if (state.enemies.some((enemy) => {
+          const previousHealth = enemyHealthBefore.get(enemy.id)
+          return previousHealth !== undefined && enemy.health < previousHealth
+        })) {
+          triggerScreenShake(state.enemies.some((enemy) => enemyHealthBefore.has(enemy.id) && enemy.health === 0) ? 12 : 4)
         }
         for (const [explosion, sprite] of explosionSprites) {
           if (!activeExplosions.has(explosion)) {
@@ -515,37 +544,67 @@ function PixiGame(props: PixiGameProps) {
             })
         }
 
-        // ENEMY
-        if (state.enemy !== null) {
+        // ENEMIES
+        const activeEnemyIds = new Set(state.enemies.map((enemy) => enemy.id))
+        for (const [enemyId, view] of enemyViews) {
+          if (activeEnemyIds.has(enemyId)) continue
+          view.sprite.destroy()
+          view.hurtBox.destroy()
+          view.hitBox.destroy()
+          view.healthBar.destroy()
+          enemyViews.delete(enemyId)
+        }
+
+        for (const enemy of state.enemies) {
+          let view = enemyViews.get(enemy.id)
+          if (view === undefined) {
+            view = {
+              sprite: createEnemySprite(enemyTextures[enemy.boatColor - 2][0]),
+              hurtBox: createEnemyHurtBoxPreview(),
+              hitBox: createEnemyHitBoxPreview(),
+              healthBar: new Graphics(),
+            }
+            worldContainer.addChild(view.sprite)
+            worldContainer.addChild(view.hurtBox)
+            worldContainer.addChild(view.hitBox)
+            worldContainer.addChild(view.healthBar)
+            enemyViews.set(enemy.id, view)
+          }
+
           const damageState = Math.min(
             3,
             Math.max(
               0,
               Math.floor(
-                (ENEMY_MAX_HEALTH - state.enemy.health) / (ENEMY_MAX_HEALTH / 4),
+                (ENEMY_MAX_HEALTH - enemy.health) / (ENEMY_MAX_HEALTH / 4),
               ),
             ),
           )
-          const damageTexture = enemyTextures[damageState]
+          const enemyTextureSet = enemyTextures[enemy.boatColor - 2]
+          const damageTexture = enemyTextureSet[damageState]
 
-          if (enemySprite.texture !== damageTexture) {
-            enemySprite.texture = damageTexture
+          if (view.sprite.texture !== damageTexture) {
+            view.sprite.texture = damageTexture
           }
 
-          enemySprite.visible = true
-          enemyHurtBoxPreview.visible = debugEnabledRef.current && state.enemy.alive
-          enemyHitBoxPreview.visible = debugEnabledRef.current && state.enemy.alive
-
-          if (state.enemy.alive) {
-            enemySprite.position.set(state.enemy.x, state.enemy.y)
-            enemySprite.rotation = state.enemy.rotation + Math.PI
-            enemyHurtBoxPreview.position.set(state.enemy.x, state.enemy.y)
-            enemyHitBoxPreview.position.set(state.enemy.x, state.enemy.y)
+          view.sprite.visible = true
+          view.sprite.position.set(enemy.x, enemy.y)
+          view.sprite.rotation = enemy.rotation + Math.PI
+          view.hurtBox.position.set(enemy.x, enemy.y)
+          view.hurtBox.rotation = enemy.rotation + Math.PI
+          view.hitBox.position.set(enemy.x, enemy.y)
+          view.hitBox.rotation = enemy.rotation + Math.PI
+          view.hurtBox.visible = debugEnabledRef.current && enemy.alive
+          view.hitBox.visible = debugEnabledRef.current
+          view.healthBar.clear()
+          if (enemy.alive) {
+            const healthRatio = Math.max(0, enemy.health / ENEMY_MAX_HEALTH)
+            view.healthBar
+              .roundRect(enemy.x - 23, enemy.y - ENEMY_HEIGHT / 2 - 14, 46, 6, 3)
+              .fill({ color: 0x24120c, alpha: 0.9 })
+              .roundRect(enemy.x - 22, enemy.y - ENEMY_HEIGHT / 2 - 13, 44 * healthRatio, 4, 2)
+              .fill({ color: healthRatio > 0.5 ? 0x37c66b : healthRatio > 0.25 ? 0xe0ae36 : 0xdb4545 })
           }
-        } else {
-          enemySprite.visible = false
-          enemyHurtBoxPreview.visible = false
-          enemyHitBoxPreview.visible = false
         }
 
         // PLAYER
@@ -635,7 +694,7 @@ function PixiGame(props: PixiGameProps) {
         // FINISH MATCH
         if (state.isFinished && !matchEndReported) {
           matchEndReported = true
-          onMatchEnd()
+          onMatchEnd(createMatchResult(state, matchDurationSeconds, spawnIntervalSeconds, debugEnabledRef.current))
         }
       })
     }
@@ -652,7 +711,7 @@ function PixiGame(props: PixiGameProps) {
       keyboardInputRef.current = undefined
       app?.destroy({ removeView: true }, { children: true })
     }
-  }, [matchDurationSeconds, onPause, onTimeUpdate, onMatchEnd])
+  }, [matchDurationSeconds, spawnIntervalSeconds, onPause, onTimeUpdate, onMatchEnd])
 
   return <div ref={hostRef} className="pixi-host" />
 }

@@ -1,5 +1,10 @@
-import type { BulletState, MovementInput, SimulationState } from '../../../types/types'
-import {BULLET_RADIUS,BULLET_SPEED,ENEMY_HEIGHT,ENEMY_SHOOT_INTERVAL_SECONDS,ENEMY_WIDTH,PLAYER_HEIGHT,PLAYER_WIDTH,} from './config'
+import type { BulletState, EnemyState, MovementInput, SimulationState } from '../../../types/types'
+import {
+  BULLET_RADIUS, BULLET_SPEED, ENEMY_CHASER_SPEED, ENEMY_COLLISION_DAMAGE,
+  ENEMY_HEIGHT, ENEMY_MAX_HEALTH, ENEMY_ROTATION_SPEED, ENEMY_SHOOTER_PREFERRED_DISTANCE,
+  ENEMY_SHOOTER_RANGE, ENEMY_SHOOTER_SPEED, ENEMY_SHOOT_INTERVAL_SECONDS, ENEMY_WIDTH,
+  ENEMY_SPAWN_SAFE_DISTANCE, PLAYER_HEIGHT, PLAYER_WIDTH,
+} from './config'
 
 // DETECT BULLET HITS BOAT FUNCTION
 function bulletHitsBoat(
@@ -165,7 +170,7 @@ function getClosestSegmentPoints(
 function separateBoatCapsules(
     player: { x: number; y: number; rotation: number },
     enemy: { x: number; y: number; rotation: number },
-): void {
+): boolean {
     const playerSegment = getCapsuleSegment(
         player,
         PLAYER_WIDTH,
@@ -189,7 +194,7 @@ function separateBoatCapsules(
     const minimumDistance = PLAYER_WIDTH / 2 + ENEMY_WIDTH / 2
 
     if (distance >= minimumDistance) {
-        return
+        return false
     }
 
     let normalX: number
@@ -215,271 +220,241 @@ function separateBoatCapsules(
     const overlap = minimumDistance - distance
     player.x += normalX * overlap
     player.y += normalY * overlap
+    return true
 }
 
 
+function wrapAngle(angle: number): number {
+  return Math.atan2(Math.sin(angle), Math.cos(angle))
+}
+
+function createEnemy(state: SimulationState, type: EnemyState['type']): EnemyState {
+  const { arenaWidth, arenaHeight } = state.config
+  const spawnPoints = [
+    { x: 48, y: 48 }, { x: arenaWidth / 2, y: 40 }, { x: arenaWidth - 48, y: 48 },
+    { x: 48, y: arenaHeight / 2 }, { x: arenaWidth - 48, y: arenaHeight / 2 },
+    { x: 48, y: arenaHeight - 48 }, { x: arenaWidth / 2, y: arenaHeight - 40 },
+    { x: arenaWidth - 48, y: arenaHeight - 48 },
+  ]
+  const safePoints = spawnPoints.filter((point) =>
+    Math.hypot(point.x - state.player.x, point.y - state.player.y) >= ENEMY_SPAWN_SAFE_DISTANCE,
+  )
+  const candidates = safePoints.length > 0 ? safePoints : spawnPoints
+  const spawn = candidates.reduce((farthest, point) =>
+    Math.hypot(point.x - state.player.x, point.y - state.player.y) >
+      Math.hypot(farthest.x - state.player.x, farthest.y - state.player.y) ? point : farthest,
+  )
+
+  return {
+    id: state.nextEnemyId++,
+    type,
+    x: spawn.x,
+    y: spawn.y,
+    rotation: 0,
+    health: ENEMY_MAX_HEALTH,
+    boatColor: type === 'shooter' ? 2 : Math.floor(Math.random() * 4) + 3,
+    alive: true,
+    shootCooldown: ENEMY_SHOOT_INTERVAL_SECONDS,
+    deathElapsedSeconds: null,
+  }
+}
+
+function damagePlayer(state: SimulationState, damage: number): void {
+  const player = state.player
+  if (!player.alive) return
+  player.health = Math.max(0, player.health - damage)
+  if (player.health === 0) {
+    player.alive = false
+    player.deathElapsedSeconds = 0
+    state.explosions.push({ x: player.x, y: player.y, age: 0 })
+    state.destructionParticles.push({ x: player.x, y: player.y, age: 0 })
+  }
+}
+
+function destroyEnemy(state: SimulationState, enemy: EnemyState, awardPoint: boolean): void {
+  if (!enemy.alive) return
+  enemy.alive = false
+  enemy.health = 0
+  enemy.deathElapsedSeconds = 0
+  state.explosions.push({ x: enemy.x, y: enemy.y, age: 0 })
+  state.destructionParticles.push({ x: enemy.x, y: enemy.y, age: 0 })
+  if (awardPoint) state.score += 1
+}
+
 export function updateSimulation(
-    
   state: SimulationState,
   input: MovementInput,
   deltaSeconds: number,
 ): void {
-    // MATCH DURATION
-    if (state.isFinished) {
-        return
-    }
+  if (state.isFinished) return
 
-    state.elapsedSeconds = Math.min(
-        state.elapsedSeconds + deltaSeconds,
-        state.matchDurationSeconds,
+  state.elapsedSeconds = Math.min(state.elapsedSeconds + deltaSeconds, state.matchDurationSeconds)
+  if (state.elapsedSeconds >= state.matchDurationSeconds) {
+    state.isFinished = true
+    state.finishReason = 'time'
+    return
+  }
+
+  const { player, config } = state
+
+  if (player.deathElapsedSeconds !== null) {
+    const previousDeathElapsedSeconds = player.deathElapsedSeconds
+    player.deathElapsedSeconds += deltaSeconds
+    if (previousDeathElapsedSeconds < 0.45 && player.deathElapsedSeconds >= 0.45) {
+      state.destructionParticles.push({ x: player.x, y: player.y, age: 0 })
+    }
+    if (player.deathElapsedSeconds >= 0.65) player.destroyed = true
+    if (player.deathElapsedSeconds >= 0.95) {
+      state.isFinished = true
+      state.finishReason = 'player_destroyed'
+      return
+    }
+  }
+
+  for (let index = state.enemies.length - 1; index >= 0; index--) {
+    const enemy = state.enemies[index]
+    if (enemy.deathElapsedSeconds === null) continue
+    const previousDeathElapsedSeconds = enemy.deathElapsedSeconds
+    enemy.deathElapsedSeconds += deltaSeconds
+    if (previousDeathElapsedSeconds < 0.45 && enemy.deathElapsedSeconds >= 0.45) {
+      state.destructionParticles.push({ x: enemy.x, y: enemy.y, age: 0 })
+    }
+    if (enemy.deathElapsedSeconds >= 0.65) state.enemies.splice(index, 1)
+  }
+
+  if (player.alive) {
+    const turnDirection = (input.turnRight ? 1 : 0) - (input.turnLeft ? 1 : 0)
+    player.rotation += turnDirection * config.rotationSpeed * deltaSeconds
+    if (input.forward) {
+      player.x += Math.sin(player.rotation) * config.moveSpeed * deltaSeconds
+      player.y -= Math.cos(player.rotation) * config.moveSpeed * deltaSeconds
+    }
+    player.x = Math.max(config.playerRadius, Math.min(config.arenaWidth - config.playerRadius, player.x))
+    player.y = Math.max(config.playerRadius, Math.min(config.arenaHeight - config.playerRadius, player.y))
+    player.shootCooldown = Math.max(0, player.shootCooldown - deltaSeconds)
+
+    if (player.shootCooldown <= 0) {
+      if (input.shoot) {
+        const distanceFromPlayer = PLAYER_HEIGHT / 2 + BULLET_RADIUS
+        state.bullets.push({
+          x: player.x + Math.sin(player.rotation) * distanceFromPlayer,
+          y: player.y - Math.cos(player.rotation) * distanceFromPlayer,
+          rotation: player.rotation + (Math.random() - 0.5) * 0.2,
+          lifeTime: 0,
+          owner: 'player',
+        })
+        player.shootCooldown = 0.5
+      } else if (input.shootLeft || input.shootRight) {
+        fireSideVolley(state, input.shootLeft ? -1 : 1)
+        player.shootCooldown = 0.5
+      }
+    }
+  }
+
+  if (player.alive) {
+    state.spawnElapsedSeconds += deltaSeconds
+    while (state.spawnElapsedSeconds >= state.spawnIntervalSeconds) {
+      state.spawnElapsedSeconds -= state.spawnIntervalSeconds
+      const nextType = state.nextEnemyId % 2 === 0 ? 'shooter' : 'chaser'
+      state.enemies.push(createEnemy(state, nextType))
+    }
+  }
+
+  for (const enemy of state.enemies) {
+    if (!enemy.alive) {
+      if (player.alive && enemy.deathElapsedSeconds !== null) {
+        separateBoatCapsules(player, enemy)
+      }
+      continue
+    }
+    if (!player.alive) continue
+    const dx = player.x - enemy.x
+    const dy = player.y - enemy.y
+    const distance = Math.max(0.001, Math.hypot(dx, dy))
+    const targetRotation = Math.atan2(dx, -dy)
+    const rotationDelta = wrapAngle(targetRotation - enemy.rotation)
+    enemy.rotation += Math.max(
+      -ENEMY_ROTATION_SPEED * deltaSeconds,
+      Math.min(ENEMY_ROTATION_SPEED * deltaSeconds, rotationDelta),
     )
 
-    if (state.elapsedSeconds >= state.matchDurationSeconds) {
-        state.isFinished = true
-        return
+    let movementDirection = 0
+    if (enemy.type === 'chaser') {
+      movementDirection = 1
+    } else if (distance > ENEMY_SHOOTER_PREFERRED_DISTANCE + 12) {
+      movementDirection = 1
+    } else if (distance < ENEMY_SHOOTER_PREFERRED_DISTANCE - 30) {
+      movementDirection = -1
     }
 
-    const player = state.player
-    const config = state.config
+    const speed = enemy.type === 'chaser' ? ENEMY_CHASER_SPEED : ENEMY_SHOOTER_SPEED
+    enemy.x += Math.sin(enemy.rotation) * speed * movementDirection * deltaSeconds
+    enemy.y -= Math.cos(enemy.rotation) * speed * movementDirection * deltaSeconds
+    enemy.x = Math.max(config.enemyRadius, Math.min(config.arenaWidth - config.enemyRadius, enemy.x))
+    enemy.y = Math.max(config.enemyRadius, Math.min(config.arenaHeight - config.enemyRadius, enemy.y))
 
-    if (player.deathElapsedSeconds !== null) {
-        const previousDeathElapsedSeconds = player.deathElapsedSeconds
-        player.deathElapsedSeconds += deltaSeconds
-
-        if (
-            previousDeathElapsedSeconds < 0.45 &&
-            player.deathElapsedSeconds >= 0.45
-        ) {
-            state.destructionParticles.push({
-                x: player.x,
-                y: player.y,
-                age: 0,
-            })
-        }
-
-        if (player.deathElapsedSeconds >= 0.65) {
-            player.destroyed = true
-        }
-
-        if (player.deathElapsedSeconds >= 0.95) {
-            state.isFinished = true
-            return
-        }
+    if (enemy.type === 'shooter') {
+      enemy.shootCooldown = Math.max(0, enemy.shootCooldown - deltaSeconds)
+      if (distance <= ENEMY_SHOOTER_RANGE && enemy.shootCooldown <= 0) {
+        state.bullets.push({
+          x: enemy.x + Math.sin(enemy.rotation) * (ENEMY_HEIGHT / 2 + BULLET_RADIUS),
+          y: enemy.y - Math.cos(enemy.rotation) * (ENEMY_HEIGHT / 2 + BULLET_RADIUS),
+          rotation: enemy.rotation,
+          lifeTime: 0,
+          owner: 'enemy',
+        })
+        enemy.shootCooldown = ENEMY_SHOOT_INTERVAL_SECONDS
+      }
     }
 
-    const enemyBeingDestroyed = state.enemy
-    const enemyDeathElapsedSeconds = enemyBeingDestroyed?.deathElapsedSeconds
-    if (
-        enemyBeingDestroyed !== null &&
-        enemyBeingDestroyed !== undefined &&
-        enemyDeathElapsedSeconds !== null &&
-        enemyDeathElapsedSeconds !== undefined
-    ) {
-        const updatedEnemyDeathElapsedSeconds = enemyDeathElapsedSeconds + deltaSeconds
-        enemyBeingDestroyed.deathElapsedSeconds = updatedEnemyDeathElapsedSeconds
+    if (separateBoatCapsules(player, enemy) && enemy.type === 'chaser') {
+      damagePlayer(state, ENEMY_COLLISION_DAMAGE)
+      destroyEnemy(state, enemy, false)
+    }
+  }
 
-        if (
-            enemyDeathElapsedSeconds < 0.45 &&
-            updatedEnemyDeathElapsedSeconds >= 0.45
-        ) {
-            state.destructionParticles.push({
-                x: enemyBeingDestroyed.x,
-                y: enemyBeingDestroyed.y,
-                age: 0,
-            })
-        }
+  player.x = Math.max(config.playerRadius, Math.min(config.arenaWidth - config.playerRadius, player.x))
+  player.y = Math.max(config.playerRadius, Math.min(config.arenaHeight - config.playerRadius, player.y))
 
-        if (updatedEnemyDeathElapsedSeconds >= 0.65) {
-            state.enemy = null
-        }
+  for (let index = state.ripples.length - 1; index >= 0; index--) {
+    state.ripples[index].age += deltaSeconds
+    if (state.ripples[index].age >= 0.5) state.ripples.splice(index, 1)
+  }
+  for (let index = state.destructionParticles.length - 1; index >= 0; index--) {
+    state.destructionParticles[index].age += deltaSeconds
+    if (state.destructionParticles[index].age >= 0.5) state.destructionParticles.splice(index, 1)
+  }
+  for (let index = state.explosions.length - 1; index >= 0; index--) {
+    state.explosions[index].age += deltaSeconds
+    if (state.explosions[index].age >= 0.36) state.explosions.splice(index, 1)
+  }
+
+  for (let index = state.bullets.length - 1; index >= 0; index--) {
+    const bullet = state.bullets[index]
+    bullet.x += Math.sin(bullet.rotation) * BULLET_SPEED * deltaSeconds
+    bullet.y -= Math.cos(bullet.rotation) * BULLET_SPEED * deltaSeconds
+    bullet.lifeTime += deltaSeconds
+
+    const outOfBounds = bullet.x < -BULLET_RADIUS || bullet.x > config.arenaWidth + BULLET_RADIUS ||
+      bullet.y < -BULLET_RADIUS || bullet.y > config.arenaHeight + BULLET_RADIUS
+    if (bullet.lifeTime >= 1 || outOfBounds) {
+      state.ripples.push({ x: bullet.x, y: bullet.y, age: 0 })
+      state.bullets.splice(index, 1)
+      continue
     }
 
-    // PLAYER MOVEMENT
-    if (player.alive) {
-        const turnDirection =
-            (input.turnRight ? 1 : 0) - (input.turnLeft ? 1 : 0)
-
-        player.rotation += turnDirection * config.rotationSpeed * deltaSeconds
-
-        if (input.forward) {
-            player.x += Math.sin(player.rotation) * config.moveSpeed * deltaSeconds
-            player.y -= Math.cos(player.rotation) * config.moveSpeed * deltaSeconds
-        }
-
-        player.x = Math.max(
-            config.playerRadius,
-            Math.min(config.arenaWidth - config.playerRadius, player.x),
-        )
-
-        player.y = Math.max(
-            config.playerRadius,
-            Math.min(config.arenaHeight - config.playerRadius, player.y),
-        )
-
-        player.shootCooldown = Math.max(
-            0,
-        player.shootCooldown - deltaSeconds,
-        )
-
-        if (input.shoot && player.shootCooldown <= 0) {
-            const distanceFromPlayer = PLAYER_HEIGHT / 2 + BULLET_RADIUS
-            const spread = (Math.random() - 0.5) * 0.2
-            state.bullets.push({
-                x: player.x + Math.sin(player.rotation) * distanceFromPlayer,
-                y: player.y - Math.cos(player.rotation) * distanceFromPlayer,
-                rotation: player.rotation + spread,
-                lifeTime: 0,
-                owner: 'player',
-            })
-            player.shootCooldown = 0.5
-        }
-        else if (input.shootLeft && player.shootCooldown <= 0) {
-            fireSideVolley(state, -1)
-            player.shootCooldown = 0.5
-        }
-        else if (input.shootRight && player.shootCooldown <= 0) {
-            fireSideVolley(state, 1)
-            player.shootCooldown = 0.5
-        }
+    if (bullet.owner === 'player') {
+      const target = state.enemies.find((enemy) => enemy.alive &&
+        bulletHitsBoat(bullet, enemy, ENEMY_WIDTH, ENEMY_HEIGHT))
+      if (target) {
+        state.bullets.splice(index, 1)
+        target.health -= 1
+        if (target.health <= 0) destroyEnemy(state, target, true)
+      }
+    } else if (player.alive && bulletHitsBoat(bullet, player, PLAYER_WIDTH, PLAYER_HEIGHT)) {
+      state.bullets.splice(index, 1)
+      damagePlayer(state, 1)
     }
 
-    // SEPARATE BOATS 
-    if (player.alive && state.enemy?.alive) {
-    separateBoatCapsules(player, state.enemy)
-
-    player.x = Math.max(
-        config.playerRadius,
-        Math.min(config.arenaWidth - config.playerRadius, player.x),
-    )
-
-    player.y = Math.max(
-        config.playerRadius,
-        Math.min(config.arenaHeight - config.playerRadius, player.y),
-    )
-    }
-
-    // ENEMY SHOOTING
-    const enemy = state.enemy
-    if (enemy?.alive && player.alive) {
-        enemy.shootCooldown -= deltaSeconds
-
-        if (enemy.shootCooldown <= 0) {
-            const directionX = player.x - enemy.x
-            const directionY = player.y - enemy.y
-
-            state.bullets.push({
-                x: enemy.x,
-                y: enemy.y,
-                rotation: Math.atan2(directionX, -directionY),
-                lifeTime: 0,
-                owner: 'enemy',
-            })
-            enemy.shootCooldown = ENEMY_SHOOT_INTERVAL_SECONDS
-        }
-    }
-
-    // RIPPLES
-    for (let i = state.ripples.length - 1; i >= 0; i--) {
-        const ripple = state.ripples[i]
-
-        ripple.age += deltaSeconds
-
-        if (ripple.age >= 0.5) {
-            state.ripples.splice(i, 1)
-        }
-    }
-
-    // DESTRUCTION PARTICLES
-    for (let i = state.destructionParticles.length - 1; i >= 0; i--) {
-        const particle = state.destructionParticles[i]
-
-        particle.age += deltaSeconds
-
-        if (particle.age >= 0.5) {
-            state.destructionParticles.splice(i, 1)
-        }
-    }
-
-    // EXPLOSIONS
-    for (let i = state.explosions.length - 1; i >= 0; i--) {
-        const explosion = state.explosions[i]
-        explosion.age += deltaSeconds
-
-        if (explosion.age >= 0.36) {
-            state.explosions.splice(i, 1)
-        }
-    }
-
-    // BULLETS
-    for (let i = state.bullets.length - 1; i >= 0; i--) {
-        const bullet = state.bullets[i]
-        bullet.x += Math.sin(bullet.rotation) * BULLET_SPEED * deltaSeconds
-        bullet.y -= Math.cos(bullet.rotation) * BULLET_SPEED * deltaSeconds
-        bullet.lifeTime += deltaSeconds
-
-        if (bullet.lifeTime >= 1) {
-            state.ripples.push({
-                x: bullet.x,
-                y: bullet.y,
-                age: 0,
-            })
-
-            state.bullets.splice(i, 1)
-            continue
-        }
-        if (bullet.owner === 'player') {
-            const targetEnemy = state.enemy
-
-            if (
-                targetEnemy?.alive &&
-                bulletHitsBoat(bullet, targetEnemy, ENEMY_WIDTH, ENEMY_HEIGHT)
-            ) {
-                state.bullets.splice(i, 1)
-                targetEnemy.health -= 1
-                if (targetEnemy.health <= 0) {
-                    targetEnemy.alive = false
-                    targetEnemy.deathElapsedSeconds = 0
-                    state.explosions.push({
-                        x: targetEnemy.x,
-                        y: targetEnemy.y,
-                        age: 0,
-                    })
-                    state.destructionParticles.push({
-                        x: targetEnemy.x,
-                        y: targetEnemy.y,
-                        age: 0,
-                    })
-                    state.score += 1
-                }
-                continue
-            }
-        } else if (player.alive && bulletHitsBoat(bullet, player, PLAYER_WIDTH, PLAYER_HEIGHT)) {
-            state.bullets.splice(i, 1)
-            player.health -= 1
-
-            if (player.health <= 0) {
-                player.health = 0
-                player.alive = false
-                player.deathElapsedSeconds = 0
-                state.explosions.push({
-                    x: player.x,
-                    y: player.y,
-                    age: 0,
-                })
-                state.destructionParticles.push({
-                    x: player.x,
-                    y: player.y,
-                    age: 0,
-                })
-            }
-            continue
-        }
-
-        if (
-            bullet.x < -BULLET_RADIUS || bullet.x > config.arenaWidth + BULLET_RADIUS ||
-            bullet.y < -BULLET_RADIUS || bullet.y > config.arenaHeight + BULLET_RADIUS
-        ) {
-            state.bullets.splice(i, 1)
-        }
-    }
+  }
 }

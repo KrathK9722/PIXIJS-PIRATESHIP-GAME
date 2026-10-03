@@ -10,6 +10,8 @@ export type PlayerState = {
 }
 
 export type EnemyState = {
+  id: number
+  type: EnemyType
   x: number
   y: number
   rotation: number
@@ -19,6 +21,8 @@ export type EnemyState = {
   shootCooldown: number
   deathElapsedSeconds: number | null
 }
+
+export type EnemyType = 'chaser' | 'shooter'
 
 export type BulletState = {
   x: number
@@ -49,7 +53,10 @@ export type MovementConfig = {
 export type SimulationState = {
   player: PlayerState
   config: MovementConfig
-  enemy: EnemyState | null
+  enemies: EnemyState[]
+  nextEnemyId: number
+  spawnElapsedSeconds: number
+  spawnIntervalSeconds: number
   bullets: BulletState[]
   ripples: RippleState[]
   explosions: ExplosionState[]
@@ -58,6 +65,19 @@ export type SimulationState = {
   elapsedSeconds: number
   matchDurationSeconds: number
   isFinished: boolean
+  finishReason: MatchFinishReason | null
+}
+
+export type MatchFinishReason = 'time' | 'player_destroyed'
+
+export type MatchResult = {
+  matchId: string
+  playerId: string
+  completedAt: string
+  score: number
+  durationSeconds: number
+  finishReason: MatchFinishReason
+  configuration: PlayerOptions
 }
 
 export type PlayerOptions = {

@@ -4,9 +4,10 @@ import {useState } from 'react'
 import {loadOptions} from '../../services/optionsStorage'
 import { formatTime } from '../Experience/config/time'
 import OptionsScreen from './OptionsScreen'
+import type { MatchResult } from '../../types/types'
 
 type GameScreenProps = {
-  onMatchEnd: () => void
+  onMatchEnd: (result: MatchResult) => void
   onReturnToMenu: () => void
 }
 
@@ -28,6 +29,7 @@ function GameScreen(props: GameScreenProps) {
         <div className="simulation">
         <PixiGame
           matchDurationSeconds={matchOptions.matchDurationSeconds}
+          spawnIntervalSeconds={matchOptions.spawnIntervalSeconds}
           debugEnabled={matchOptions.debugEnabled}
           isPaused={isPaused}
           onPause={setIsPaused}
