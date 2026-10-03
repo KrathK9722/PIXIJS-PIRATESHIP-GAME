@@ -3,6 +3,8 @@ export type PlayerState = {
   y: number
   rotation: number
   health: number
+  alive: boolean
+  destroyed: boolean
 }
 
 export type EnemyState = {
@@ -11,6 +13,8 @@ export type EnemyState = {
   rotation: number
   health: number
   boatColor: number
+  alive: boolean
+  shootCooldown: number
 }
 
 export type BulletState = {
@@ -18,6 +22,7 @@ export type BulletState = {
   y: number
   rotation: number
   lifeTime: number
+  owner: 'player' | 'enemy'
 }
 
 export type MovementInput = {
@@ -42,6 +47,8 @@ export type SimulationState = {
   enemy: EnemyState | null
   bullets: BulletState[]
   ripples: RippleState[]
+  explosions: ExplosionState[]
+  destructionParticles: DestructionParticleState[]
   score: number
   elapsedSeconds: number
   matchDurationSeconds: number
@@ -54,6 +61,18 @@ export type PlayerOptions = {
 }
 
 export type RippleState = {
+  x: number
+  y: number
+  age: number
+}
+
+export type ExplosionState = {
+  x: number
+  y: number
+  age: number
+}
+
+export type DestructionParticleState = {
   x: number
   y: number
   age: number

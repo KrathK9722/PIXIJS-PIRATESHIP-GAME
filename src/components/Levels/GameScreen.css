@@ -1,19 +1,13 @@
 .game-frame {
   position: relative;
-  width: min(92vw, 960px);
+  box-sizing: content-box;
+  width: min(calc(92vw - 64px), 960px);
   aspect-ratio: 16 / 9;
-}
-
-.game-frame::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border: 6px solid #b57830;
-  border-radius: 12px;
-  box-sizing: border-box;
-  pointer-events: none;
-  z-index: 1;
-  
+  border: 32px solid transparent;
+  border-image-source: url('/assets/jungleGaming/png/default/ui/menu/panel_menu.png');
+  border-image-slice: 48 fill;
+  border-image-width: 32px;
+  border-image-repeat: stretch;
 }
 .game-screen {
   width: 100%;
@@ -22,6 +16,7 @@
   flex-direction: column;
   align-items: center;
   gap: 16px;
+  background: linear-gradient(to bottom, #1e3c5a, #0f1f2b);
 }
 
 .visually-hidden {
@@ -34,4 +29,11 @@
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+.simulation {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
 }

@@ -15,8 +15,8 @@ export function createHudCounter(
 
   const icon = new Sprite(iconTexture)
   icon.anchor.set(0.5)
-  icon.width = 44
-  icon.height = 44
+  icon.width = 34
+  icon.height = 34
   icon.position.set(28, 28)
   container.addChild(icon)
 

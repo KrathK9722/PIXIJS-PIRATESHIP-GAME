@@ -55,10 +55,17 @@ export const MOVEMENT_CONFIG: MovementConfig = {
   arenaWidth: 960,
   arenaHeight: 540,
   playerRadius: 24,
-  enemyRadius: 32,
+  enemyRadius: 24,
   moveSpeed: 180,
   rotationSpeed: Math.PI,
 }
 
+export const PLAYER_WIDTH = 48
+export const PLAYER_HEIGHT = 96
+export const PLAYER_MAX_HEALTH = 12
+export const ENEMY_WIDTH = 48
+export const ENEMY_HEIGHT = 96
+export const ENEMY_MAX_HEALTH = 3
+export const ENEMY_SHOOT_INTERVAL_SECONDS = 1.5
 export const BULLET_SPEED = 400
 export const BULLET_RADIUS = 5

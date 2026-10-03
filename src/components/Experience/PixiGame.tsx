@@ -1,14 +1,35 @@
 import { useEffect, useRef } from 'react'
-import { Application, Assets, Graphics, Sprite, Texture } from 'pixi.js'
-import { BULLET_RADIUS, MOVEMENT_CONFIG } from './config/config'
+import { 
+  Application, 
+  Assets, 
+  Container, 
+  Graphics, 
+  Sprite, 
+  Texture 
+} from 'pixi.js'
+import {
+  BULLET_RADIUS,
+  MOVEMENT_CONFIG,
+  ENEMY_HEIGHT,
+  ENEMY_WIDTH,
+  PLAYER_HEIGHT,
+  PLAYER_MAX_HEALTH,
+  PLAYER_WIDTH,
+  ENEMY_MAX_HEALTH,
+  ENEMY_SHOOT_INTERVAL_SECONDS,
+} from './config/config'
 import { createKeyboardInput } from './config/input'
 import { updateSimulation } from './config/simulation'
 import { formatTime } from './config/time'
-import type { SimulationState } from '../../types/types'
+import type { ExplosionState, SimulationState } from '../../types/types'
 import './PixiGame.css'
 import { createHudCounter } from './config/createHudCounter'
 
-const PLAYER_TEXTURE_URL = '/assets/kenney_piratePack/PNG/Default size/Ships/ship (1).png'
+const PLAYER_TEXTURE_URLS = Array.from(
+  { length: 4 },
+  (_, damageState) =>
+    `/assets/kenney_piratePack/PNG/Default size/Ships/ship (${1 + damageState * 6}).png`,
+)
 
 type PixiGameProps = {
   matchDurationSeconds: number
@@ -30,17 +51,23 @@ function createInitialSimulationState(matchDurationSeconds: number): SimulationS
       x: MOVEMENT_CONFIG.arenaWidth / 2,
       y: MOVEMENT_CONFIG.arenaHeight / 2,
       rotation: 0,
-      health: 10,
+      health: PLAYER_MAX_HEALTH,
+      alive: true,
+      destroyed: false,
     },
     enemy: {
       x: MOVEMENT_CONFIG.arenaWidth / 2,
       y: 120,
       rotation: 0,
-      health: 4,
+      health: ENEMY_MAX_HEALTH,
       boatColor: getRandomInteger(2,6),
+      alive: true,
+      shootCooldown: ENEMY_SHOOT_INTERVAL_SECONDS,
     },
     bullets: [],
     ripples: [],
+    explosions: [],
+    destructionParticles: [],
     score: 0,
     config: MOVEMENT_CONFIG,
     elapsedSeconds: 0,
@@ -52,31 +79,65 @@ function createInitialSimulationState(matchDurationSeconds: number): SimulationS
 function createPlayerSprite(texture: Texture): Sprite {
   const playerSprite = new Sprite(texture)
   playerSprite.anchor.set(0.5)
-  playerSprite.width = 48
-  playerSprite.height = 96
+  playerSprite.width = PLAYER_WIDTH
+  playerSprite.height = PLAYER_HEIGHT
   return playerSprite
 }
 
-function createPlayerRadiusPreview(): Graphics {
+function createPlayerHurtBoxPreview(): Graphics {
   return new Graphics()
-    .circle(0, 0, MOVEMENT_CONFIG.playerRadius)
+    .rect(
+      -PLAYER_WIDTH / 2,
+      -PLAYER_HEIGHT / 2,
+      PLAYER_WIDTH,
+      PLAYER_HEIGHT,
+    )
     .fill({ color: 0xff0000, alpha: 0.25 })
     .stroke({ color: 0xff3333, width: 2 })
+}
+
+function createPlayerHitBoxPreview(): Graphics {
+  return new Graphics()
+    .roundRect(
+      -PLAYER_WIDTH / 2,
+      -PLAYER_HEIGHT / 2,
+      PLAYER_WIDTH,
+      PLAYER_HEIGHT, 24
+    )
+    .fill({ color: 0xff0000, alpha: 0.25 })
+    .stroke({ color: 0xFFFF00, width: 2 })
 }
 
 function createEnemySprite(texture: Texture): Sprite {
   const enemySprite = new Sprite(texture)
   enemySprite.anchor.set(0.5)
-  enemySprite.width = 48
-  enemySprite.height = 96
+  enemySprite.width = ENEMY_WIDTH
+  enemySprite.height = ENEMY_HEIGHT
   return enemySprite
 }
 
-function createEnemyRadiusPreview(): Graphics {
+function createEnemyHurtBoxPreview(): Graphics {
   return new Graphics()
-    .circle(0, 0, MOVEMENT_CONFIG.enemyRadius)
+    .rect(
+      -ENEMY_WIDTH / 2,
+      -ENEMY_HEIGHT / 2,
+      ENEMY_WIDTH,
+      ENEMY_HEIGHT,
+    )
     .fill({ color: 0xff0000, alpha: 0.25 })
     .stroke({ color: 0xff3333, width: 2 })
+}
+
+function createEnemyHitBoxPreview(): Graphics {
+  return new Graphics()
+    .roundRect(
+      -ENEMY_WIDTH / 2,
+      -ENEMY_HEIGHT / 2,
+      ENEMY_WIDTH,
+      ENEMY_HEIGHT, 24
+    )
+    .fill({ color: 0xff0000, alpha: 0.25 })
+    .stroke({ color: 0xFFFF00, width: 2 })
 }
 
 
@@ -105,20 +166,33 @@ function PixiGame(props: PixiGameProps) {
         return
       }
 
-      const enemyTextureURL =`/assets/kenney_piratePack/PNG/Default size/Ships/ship (${state.enemy.boatColor}).png`
+      const enemyBoatColor = state.enemy.boatColor
+      const enemyTextureURLs = Array.from(
+        { length: 4 },
+        (_, damageState) =>
+          `/assets/kenney_piratePack/PNG/Default size/Ships/ship (${enemyBoatColor + damageState * 6}).png`,
+      )
 
       const [
-        playerTexture,
-        enemyTexture,
+        playerTextures,
         counterPanelTexture,
         timeIconTexture,
+        scoreIconTexture,
         bulletTexture,
+        enemyTextures,
+        explosionTextures,
       ] = await Promise.all([
-        Assets.load<Texture>(PLAYER_TEXTURE_URL),
-        Assets.load<Texture>(enemyTextureURL),
+        Promise.all(PLAYER_TEXTURE_URLS.map((url) => Assets.load<Texture>(url))),
         Assets.load<Texture>('/assets/jungleGaming/png/default/ui/hud/counter_panel.png'),
         Assets.load<Texture>('/assets/jungleGaming/png/default/ui/hud/icon_time.png'),
+        Assets.load<Texture>('/assets/jungleGaming/png/default/ui/hud/icon_score.png'),
         Assets.load<Texture>('/assets/kenney_piratePack/PNG/Default size/Ship parts/cannonBall.png'),
+        Promise.all(enemyTextureURLs.map((url) => Assets.load<Texture>(url))),
+        Promise.all([
+          Assets.load<Texture>('/assets/kenney_piratePack/PNG/Default size/Effects/explosion3.png'),
+          Assets.load<Texture>('/assets/kenney_piratePack/PNG/Default size/Effects/explosion2.png'),
+          Assets.load<Texture>('/assets/kenney_piratePack/PNG/Default size/Effects/explosion1.png'),
+        ]),
       ])
 
       if (disposed) {
@@ -142,25 +216,51 @@ function PixiGame(props: PixiGameProps) {
       app = newApp
       host.appendChild(newApp.canvas)
 
+      // CONTAINER
+      const worldContainer = new Container()
+      newApp.stage.addChild(worldContainer)
+
+      const shakeDuration = 0.25
+      let shakeRemaining = 0
+      let shakeStrength = 0
+      const worldOriginX = worldContainer.x
+      const worldOriginY = worldContainer.y
+
+      function triggerScreenShake(strength: number) {
+        shakeRemaining = shakeDuration
+        shakeStrength = Math.max(shakeStrength, strength)
+      }
+
       // CREATE WAVES
       const ripplesGraphics = new Graphics()
-      newApp.stage.addChild(ripplesGraphics)
+      worldContainer.addChild(ripplesGraphics)
+
+      // CREATE DESTRUCTION PARTICLES
+      const destructionParticlesGraphics = new Graphics()
+      worldContainer.addChild(destructionParticlesGraphics)
 
       // CREATE PLAYER ON CANVAS
-      const playerSprite = createPlayerSprite(playerTexture)
-      const playerRadiusPreview = createPlayerRadiusPreview()
+      const playerSprite = createPlayerSprite(playerTextures[0])
+      const playerHurtBoxPreview = createPlayerHurtBoxPreview()
+      const playerHitBoxPreview = createPlayerHitBoxPreview()
       const bulletSprites: Sprite[] = []
       keyboardInput = createKeyboardInput()
 
-      newApp.stage.addChild(playerSprite)
-      newApp.stage.addChild(playerRadiusPreview)
+      worldContainer.addChild(playerSprite)
+      worldContainer.addChild(playerHurtBoxPreview)
+      worldContainer.addChild(playerHitBoxPreview)
 
       // CREATE ENEMY ON CANVAS
-      const enemySprite = createEnemySprite(enemyTexture)
-      const enemyRadiusPreview = createEnemyRadiusPreview()
-
-      newApp.stage.addChild(enemySprite)
-      newApp.stage.addChild(enemyRadiusPreview)
+      const enemySprite = createEnemySprite(enemyTextures[0])
+      const enemyHurtBoxPreview = createEnemyHurtBoxPreview()
+      const enemyHitBoxPreview = createEnemyHitBoxPreview()
+      enemyHurtBoxPreview.position.set(state.enemy.x, state.enemy.y)
+      enemyHurtBoxPreview.rotation = state.enemy.rotation + Math.PI
+      enemyHitBoxPreview.position.set(state.enemy.x, state.enemy.y)
+      enemyHitBoxPreview.rotation = state.enemy.rotation + Math.PI
+      worldContainer.addChild(enemySprite)
+      worldContainer.addChild(enemyHurtBoxPreview)
+      worldContainer.addChild(enemyHitBoxPreview)
 
       // CREATE TIMER ON CANVAS
       const timeCounter = createHudCounter(
@@ -171,15 +271,38 @@ function PixiGame(props: PixiGameProps) {
 
       timeCounter.container.position.set(24, 16)
       newApp.stage.addChild(timeCounter.container)
+      
+      const scoreCounter = createHudCounter(
+        counterPanelTexture,
+        scoreIconTexture,
+        String(state.score),
+      )
+
+      // CREATE SCORE ON CANVAS
+      scoreCounter.container.position.set(24, 80)
+      newApp.stage.addChild(scoreCounter.container)
+      let lastReportedScore = state.score
+
+      // CREATE EXPLOSIONS ON CANVAS
+      const explosionSprites = new Map<ExplosionState, Sprite>()
 
       // RUN TIME
       newApp.ticker.add((ticker) => {
         if (state.isFinished) {
+          if (!matchEndReported) {
+            matchEndReported = true
+            onMatchEnd()
+          }
           return
         }
 
+        // REAL TIME
         const deltaSeconds = Math.min(ticker.deltaMS / 1000, 0.05)
 
+        // SAVE PLAYER AND ENEMY HEALTH BEFORE UPDATE
+        const playerHealthBefore = state.player.health
+        const enemyHealthBefore = state.enemy?.health
+        
         updateSimulation(state, keyboardInput?.read() ?? {
           forward: false,
           turnLeft: false,
@@ -187,6 +310,66 @@ function PixiGame(props: PixiGameProps) {
           shoot: false,
         }, deltaSeconds)
         
+  
+        const activeExplosions = new Set(state.explosions)
+
+        // SCREEN SHAKE
+        if (state.player.health < playerHealthBefore) {
+          triggerScreenShake(state.player.health === 0 ? 12 : 4)
+        }
+
+        if (
+          state.enemy !== null &&
+          enemyHealthBefore !== undefined &&
+          state.enemy.health < enemyHealthBefore
+        ) {
+          triggerScreenShake(state.enemy.health === 0 ? 12 : 4)
+        }
+        for (const [explosion, sprite] of explosionSprites) {
+          if (!activeExplosions.has(explosion)) {
+            sprite.destroy()
+            explosionSprites.delete(explosion)
+          }
+        }
+
+        shakeRemaining = Math.max(0, shakeRemaining - deltaSeconds)
+
+        if (shakeRemaining > 0) {
+          const intensity = shakeStrength * (shakeRemaining / shakeDuration)
+          const offsetX = (Math.random() * 2 - 1) * intensity
+          const offsetY = (Math.random() * 2 - 1) * intensity
+
+          worldContainer.position.set(
+            worldOriginX + offsetX,
+            worldOriginY + offsetY,
+          )
+        } else {
+          worldContainer.position.set(worldOriginX, worldOriginY)
+          shakeStrength = 0
+        }
+
+        // EXPLOSION ANIMATION
+        for (const explosion of state.explosions) {
+          let sprite = explosionSprites.get(explosion)
+
+          if (sprite === undefined) {
+            sprite = new Sprite(explosionTextures[0])
+            sprite.anchor.set(0.5)
+            sprite.width = 48
+            sprite.height = 48
+            worldContainer.addChild(sprite)
+            explosionSprites.set(explosion, sprite)
+          }
+
+          const frameIndex = Math.min(
+            explosionTextures.length - 1,
+            Math.floor(explosion.age / 0.12),
+          )
+
+          sprite.texture = explosionTextures[frameIndex]
+          sprite.position.set(explosion.x, explosion.y)
+        }
+
         ripplesGraphics.clear()
 
         // WAVE ANIMATION
@@ -205,24 +388,79 @@ function PixiGame(props: PixiGameProps) {
             })
         }
 
+        destructionParticlesGraphics.clear()
+
+        // DESTRUCTION PARTICLES ANIMATION
+        for (const particle of state.destructionParticles) {
+          const progress = particle.age / 0.5
+
+          const radius = state.config.enemyRadius + progress * getRandomInteger(7,14)
+          const alpha = 1 - progress
+
+          destructionParticlesGraphics
+            .circle(particle.x, particle.y, radius)
+            .stroke({
+              color: 0x4208,
+              width: 2,
+              alpha,
+            })
+        }
+
         // ENEMY
         if (state.enemy !== null) {
+          const damageState = Math.min(
+            3,
+            Math.max(
+              0,
+              Math.floor(
+                (ENEMY_MAX_HEALTH - state.enemy.health) / (ENEMY_MAX_HEALTH / 4),
+              ),
+            ),
+          )
+          const damageTexture = enemyTextures[damageState]
+
+          if (enemySprite.texture !== damageTexture) {
+            enemySprite.texture = damageTexture
+          }
+
           enemySprite.visible = true
-          enemyRadiusPreview.visible = true
+          enemyHurtBoxPreview.visible = state.enemy.alive
+          enemyHitBoxPreview.visible = state.enemy.alive
 
-          enemySprite.position.set(state.enemy.x, state.enemy.y)
-          enemySprite.rotation = state.enemy.rotation + Math.PI
-
-          enemyRadiusPreview.position.set(state.enemy.x, state.enemy.y)
+          if (state.enemy.alive) {
+            enemySprite.position.set(state.enemy.x, state.enemy.y)
+            enemySprite.rotation = state.enemy.rotation + Math.PI
+            enemyHurtBoxPreview.position.set(state.enemy.x, state.enemy.y)
+            enemyHitBoxPreview.position.set(state.enemy.x, state.enemy.y)
+          }
         } else {
           enemySprite.visible = false
-          enemyRadiusPreview.visible = false
+          enemyHurtBoxPreview.visible = false
+          enemyHitBoxPreview.visible = false
         }
 
         // PLAYER
         playerSprite.position.set(state.player.x, state.player.y)
         playerSprite.rotation = state.player.rotation + Math.PI
-        playerRadiusPreview.position.set(state.player.x, state.player.y)
+        const playerDamageState = Math.min(
+          3,
+          Math.max(0, Math.floor((PLAYER_MAX_HEALTH - state.player.health) / 4)),
+        )
+        const playerDamageTexture = playerTextures[playerDamageState]
+
+        if (playerSprite.texture !== playerDamageTexture) {
+          playerSprite.texture = playerDamageTexture
+        }
+
+        playerSprite.visible = !state.player.destroyed
+
+        playerHurtBoxPreview.position.set(state.player.x, state.player.y)
+        playerHurtBoxPreview.rotation = state.player.rotation + Math.PI
+        playerHurtBoxPreview.visible = state.player.alive
+
+        playerHitBoxPreview.position.set(state.player.x, state.player.y)
+        playerHitBoxPreview.rotation = state.player.rotation + Math.PI
+        playerHitBoxPreview.visible = state.player.alive
 
         // DRAW BULLETS
         while (bulletSprites.length < state.bullets.length) {
@@ -232,7 +470,7 @@ function PixiGame(props: PixiGameProps) {
           sprite.width = BULLET_RADIUS * 2
           sprite.height = BULLET_RADIUS * 2
 
-          newApp.stage.addChild(sprite)
+          worldContainer.addChild(sprite)
           bulletSprites.push(sprite)
         }
 
@@ -263,6 +501,11 @@ function PixiGame(props: PixiGameProps) {
           lastReportedSeconds = secondsRemaining
           timeCounter.setValue(formatTime(secondsRemaining))
           onTimeUpdate(secondsRemaining)
+        }
+
+        if (state.score !== lastReportedScore) {
+          lastReportedScore = state.score
+          scoreCounter.setValue(String(state.score))
         }
 
         // FINISH MATCH

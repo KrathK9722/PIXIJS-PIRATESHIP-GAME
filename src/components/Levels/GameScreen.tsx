@@ -21,11 +21,13 @@ function GameScreen(props: GameScreenProps) {
         Time remaining: {formatTime(secondsRemaining)}
       </p>
       <div className="game-frame">
+        <div className="simulation">
         <PixiGame
           matchDurationSeconds={matchOptions.matchDurationSeconds}
           onTimeUpdate={setSecondsRemaining}
           onMatchEnd={props.onMatchEnd}
         />
+        </div>
       </div>
     </section>
   )
