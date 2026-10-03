@@ -218,14 +218,12 @@ function separateBoatCapsules(
 }
 
 
-export async function updateSimulation(
+export function updateSimulation(
     
   state: SimulationState,
   input: MovementInput,
   deltaSeconds: number,
-): Promise<void> {
-    const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
+): void {
     // MATCH DURATION
     if (state.isFinished) {
         return
@@ -243,6 +241,58 @@ export async function updateSimulation(
 
     const player = state.player
     const config = state.config
+
+    if (player.deathElapsedSeconds !== null) {
+        const previousDeathElapsedSeconds = player.deathElapsedSeconds
+        player.deathElapsedSeconds += deltaSeconds
+
+        if (
+            previousDeathElapsedSeconds < 0.45 &&
+            player.deathElapsedSeconds >= 0.45
+        ) {
+            state.destructionParticles.push({
+                x: player.x,
+                y: player.y,
+                age: 0,
+            })
+        }
+
+        if (player.deathElapsedSeconds >= 0.65) {
+            player.destroyed = true
+        }
+
+        if (player.deathElapsedSeconds >= 0.95) {
+            state.isFinished = true
+            return
+        }
+    }
+
+    const enemyBeingDestroyed = state.enemy
+    const enemyDeathElapsedSeconds = enemyBeingDestroyed?.deathElapsedSeconds
+    if (
+        enemyBeingDestroyed !== null &&
+        enemyBeingDestroyed !== undefined &&
+        enemyDeathElapsedSeconds !== null &&
+        enemyDeathElapsedSeconds !== undefined
+    ) {
+        const updatedEnemyDeathElapsedSeconds = enemyDeathElapsedSeconds + deltaSeconds
+        enemyBeingDestroyed.deathElapsedSeconds = updatedEnemyDeathElapsedSeconds
+
+        if (
+            enemyDeathElapsedSeconds < 0.45 &&
+            updatedEnemyDeathElapsedSeconds >= 0.45
+        ) {
+            state.destructionParticles.push({
+                x: enemyBeingDestroyed.x,
+                y: enemyBeingDestroyed.y,
+                age: 0,
+            })
+        }
+
+        if (updatedEnemyDeathElapsedSeconds >= 0.65) {
+            state.enemy = null
+        }
+    }
 
     // PLAYER MOVEMENT
     if (player.alive) {
@@ -388,6 +438,7 @@ export async function updateSimulation(
                 targetEnemy.health -= 1
                 if (targetEnemy.health <= 0) {
                     targetEnemy.alive = false
+                    targetEnemy.deathElapsedSeconds = 0
                     state.explosions.push({
                         x: targetEnemy.x,
                         y: targetEnemy.y,
@@ -399,14 +450,6 @@ export async function updateSimulation(
                         age: 0,
                     })
                     state.score += 1
-                    await wait(450);
-                    state.destructionParticles.push({
-                        x: targetEnemy.x,
-                        y: targetEnemy.y,
-                        age: 0,
-                    })
-                    await wait(200);
-                    state.enemy = null
                 }
                 continue
             }
@@ -417,6 +460,7 @@ export async function updateSimulation(
             if (player.health <= 0) {
                 player.health = 0
                 player.alive = false
+                player.deathElapsedSeconds = 0
                 state.explosions.push({
                     x: player.x,
                     y: player.y,
@@ -427,16 +471,6 @@ export async function updateSimulation(
                     y: player.y,
                     age: 0,
                 })
-                await wait(450)
-                state.destructionParticles.push({
-                    x: player.x,
-                    y: player.y,
-                    age: 0,
-                })
-                await wait(200)
-                player.destroyed = true
-                await wait(300)
-                state.isFinished = true
             }
             continue
         }

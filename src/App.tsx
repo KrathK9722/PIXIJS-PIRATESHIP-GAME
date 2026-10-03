@@ -16,7 +16,12 @@ function App() {
 
       {screen === 'menu' && (<MainMenu onStartGame={() => setScreen('game')} onOpenOptions={() => setScreen('options')}/>)}
 
-      {screen === 'game' && (<GameScreen onMatchEnd={() => setScreen('result')} />)}
+      {screen === 'game' && (
+        <GameScreen
+          onMatchEnd={() => setScreen('result')}
+          onReturnToMenu={() => setScreen('menu')}
+        />
+      )}
 
       {screen === 'result' && <ResultScreen />}
     </main>

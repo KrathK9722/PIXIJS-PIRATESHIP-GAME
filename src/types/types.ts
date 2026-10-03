@@ -6,6 +6,7 @@ export type PlayerState = {
   alive: boolean
   destroyed: boolean
   shootCooldown: number
+  deathElapsedSeconds: number | null
 }
 
 export type EnemyState = {
@@ -16,6 +17,7 @@ export type EnemyState = {
   boatColor: number
   alive: boolean
   shootCooldown: number
+  deathElapsedSeconds: number | null
 }
 
 export type BulletState = {

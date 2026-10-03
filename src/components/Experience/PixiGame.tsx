@@ -35,6 +35,8 @@ const PLAYER_TEXTURE_URLS = Array.from(
 type PixiGameProps = {
   matchDurationSeconds: number
   debugEnabled: boolean
+  isPaused: boolean
+  onPause: (paused: boolean) => void
   onTimeUpdate: (secondsRemaining: number) => void
   onMatchEnd: () => void
 }
@@ -57,6 +59,7 @@ function createInitialSimulationState(matchDurationSeconds: number): SimulationS
       alive: true,
       destroyed: false,
       shootCooldown: 0,
+      deathElapsedSeconds: null,
     },
     enemy: {
       x: MOVEMENT_CONFIG.arenaWidth / 2,
@@ -66,6 +69,7 @@ function createInitialSimulationState(matchDurationSeconds: number): SimulationS
       boatColor: getRandomInteger(2,6),
       alive: true,
       shootCooldown: ENEMY_SHOOT_INTERVAL_SECONDS,
+      deathElapsedSeconds: null,
     },
     bullets: [],
     ripples: [],
@@ -148,13 +152,25 @@ function PixiGame(props: PixiGameProps) {
   const hostRef = useRef<HTMLDivElement | null>(null)
   const matchDurationSeconds = props.matchDurationSeconds
   const debugEnabled = props.debugEnabled
+  const isPaused = props.isPaused
+  const onPause = props.onPause
   const onTimeUpdate = props.onTimeUpdate
   const onMatchEnd = props.onMatchEnd
   const debugEnabledRef = useRef(debugEnabled)
+  const isPausedRef = useRef(isPaused)
+  const keyboardInputRef = useRef<ReturnType<typeof createKeyboardInput> | undefined>(undefined)
 
   useEffect(() => {
     debugEnabledRef.current = debugEnabled
   }, [debugEnabled])
+
+  useEffect(() => {
+    isPausedRef.current = isPaused
+
+    if (isPaused) {
+      keyboardInputRef.current?.clear()
+    }
+  }, [isPaused])
 
   useEffect(() => {
     let disposed = false
@@ -187,6 +203,10 @@ function PixiGame(props: PixiGameProps) {
         counterPanelTexture,
         timeIconTexture,
         scoreIconTexture,
+        pauseButtonNormalTexture,
+        pauseButtonHoverTexture,
+        pauseButtonPressedTexture,
+        pauseIconTexture,
         healthFrameTexture,
         healthGreenTexture,
         healthAmberTexture,
@@ -200,6 +220,10 @@ function PixiGame(props: PixiGameProps) {
         Assets.load<Texture>('/assets/jungleGaming/png/default/ui/hud/counter_panel.png'),
         Assets.load<Texture>('/assets/jungleGaming/png/default/ui/hud/icon_time.png'),
         Assets.load<Texture>('/assets/jungleGaming/png/default/ui/hud/icon_score.png'),
+        Assets.load<Texture>('/assets/jungleGaming/png/default/ui/controls/button_round_normal.png'),
+        Assets.load<Texture>('/assets/jungleGaming/png/default/ui/controls/button_round_hover.png'),
+        Assets.load<Texture>('/assets/jungleGaming/png/default/ui/controls/button_round_pressed.png'),
+        Assets.load<Texture>('/assets/jungleGaming/png/default/ui/controls/icon_pause.png'),
         Assets.load<Texture>('/assets/jungleGaming/png/default/ui/hud/health_frame.png'),
         Assets.load<Texture>('/assets/jungleGaming/png/default/ui/hud/health_fill_green.png'),
         Assets.load<Texture>('/assets/jungleGaming/png/default/ui/hud/health_fill_amber.png'),
@@ -267,6 +291,7 @@ function PixiGame(props: PixiGameProps) {
       const playerHitBoxPreview = createPlayerHitBoxPreview()
       const bulletSprites: Sprite[] = []
       keyboardInput = createKeyboardInput()
+      keyboardInputRef.current = keyboardInput
 
       worldContainer.addChild(playerSprite)
       worldContainer.addChild(playerHurtBoxPreview)
@@ -292,7 +317,7 @@ function PixiGame(props: PixiGameProps) {
       )
 
       timeCounter.container.position.set(
-        MOVEMENT_CONFIG.arenaWidth - 24 - 160,
+        MOVEMENT_CONFIG.arenaWidth - 24 - 160 - 48 - 12,
         16,
       )
       newApp.stage.addChild(timeCounter.container)
@@ -305,7 +330,7 @@ function PixiGame(props: PixiGameProps) {
 
       // CREATE SCORE ON CANVAS
       scoreCounter.container.position.set(
-        MOVEMENT_CONFIG.arenaWidth - 24 - 160 * 2 - 12,
+        MOVEMENT_CONFIG.arenaWidth - 24 - 160 * 2 - 48 - 12 * 2,
         16,
       )
       newApp.stage.addChild(scoreCounter.container)
@@ -326,11 +351,50 @@ function PixiGame(props: PixiGameProps) {
       newApp.stage.addChild(healthCounter.container)
       let lastReportedPlayerHealth = state.player.health
 
+      const pauseButton = new Container()
+      pauseButton.position.set(MOVEMENT_CONFIG.arenaWidth - 24 - 48, 16)
+      pauseButton.eventMode = 'static'
+      pauseButton.cursor = 'pointer'
+
+      const pauseButtonBackground = new Sprite(pauseButtonNormalTexture)
+      pauseButtonBackground.width = 48
+      pauseButtonBackground.height = 48
+      pauseButton.addChild(pauseButtonBackground)
+
+      const pauseButtonIcon = new Sprite(pauseIconTexture)
+      pauseButtonIcon.anchor.set(0.5)
+      pauseButtonIcon.width = 24
+      pauseButtonIcon.height = 24
+      pauseButtonIcon.position.set(24, 24)
+      pauseButton.addChild(pauseButtonIcon)
+
+      pauseButton.on('pointerover', () => {
+        pauseButtonBackground.texture = pauseButtonHoverTexture
+      })
+      pauseButton.on('pointerout', () => {
+        pauseButtonBackground.texture = pauseButtonNormalTexture
+      })
+      pauseButton.on('pointerdown', () => {
+        pauseButtonBackground.texture = pauseButtonPressedTexture
+      })
+      pauseButton.on('pointerup', () => {
+        pauseButtonBackground.texture = pauseButtonHoverTexture
+      })
+      pauseButton.on('pointerupoutside', () => {
+        pauseButtonBackground.texture = pauseButtonNormalTexture
+      })
+      pauseButton.on('pointertap', () => onPause(true))
+      newApp.stage.addChild(pauseButton)
+
       // CREATE EXPLOSIONS ON CANVAS
       const explosionSprites = new Map<ExplosionState, Sprite>()
 
       // RUN TIME
       newApp.ticker.add((ticker) => {
+        if (isPausedRef.current) {
+          return
+        }
+
         if (state.isFinished) {
           if (!matchEndReported) {
             matchEndReported = true
@@ -585,9 +649,10 @@ function PixiGame(props: PixiGameProps) {
     return () => {
       disposed = true
       keyboardInput?.destroy()
+      keyboardInputRef.current = undefined
       app?.destroy({ removeView: true }, { children: true })
     }
-  }, [matchDurationSeconds, onTimeUpdate, onMatchEnd])
+  }, [matchDurationSeconds, onPause, onTimeUpdate, onMatchEnd])
 
   return <div ref={hostRef} className="pixi-host" />
 }

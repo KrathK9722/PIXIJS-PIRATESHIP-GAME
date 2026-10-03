@@ -6,6 +6,7 @@ import './OptionsScreen.css'
 
 type OptionsScreenProps = {
   onComeBack: () => void
+  returnButtonLabel?: string
 }
 
 function OptionsScreen(props: OptionsScreenProps) {
@@ -183,7 +184,7 @@ function OptionsScreen(props: OptionsScreenProps) {
             </button>
 
             <button type="button" className="options-menu-secondary-button" onClick={props.onComeBack}>
-            Back to Menu
+            {props.returnButtonLabel ?? 'Back to Menu'}
             </button>
         </div>
       </form>

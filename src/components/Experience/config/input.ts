@@ -62,6 +62,8 @@ export function createKeyboardInput() {
       }
     },
 
+    clear: clearPressedKeys,
+
     destroy() {
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)
