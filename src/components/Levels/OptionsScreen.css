@@ -105,7 +105,7 @@
   align-items: center;
   min-height: 100vh;
   gap: 16px;
-  background-image: url('/assets/jungleGaming/ui_scene_background.png');
+  background: linear-gradient(to bottom, #1e3c5a, #0f1f2b);
   background-repeat: no-repeat;
   background-position: center;
   background-size: cover;

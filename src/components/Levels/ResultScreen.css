@@ -6,10 +6,7 @@
   align-items: center;
   gap: 18px;
   padding: 24px 16px;
-  background-image: url('/assets/jungleGaming/ui_scene_background.png');
-  background-repeat: no-repeat;
-  background-position: center;
-  background-size: cover;
+  background: linear-gradient(to bottom, #1e3c5a, #0f1f2b);
 }
 
 .result-title-art {
