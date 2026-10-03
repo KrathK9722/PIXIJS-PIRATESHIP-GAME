@@ -1,0 +1,16 @@
+
+.leaderboard-panel {
+  gap: 12px;
+}
+
+.leaderboard-config {
+  margin: 0;
+  color: #f3d38a;
+  font-size: 14px;
+}
+
+.leaderboard-message {
+  margin: 24px 0;
+  color: #fff1c4;
+  font-size: 16px;
+}

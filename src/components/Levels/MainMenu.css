@@ -19,7 +19,7 @@
 
 .menu-options{
     width: min(90vw, 480px);
-    aspect-ratio: 384 / 480;
+    aspect-ratio: 384 / 540;
     background-image: url('/assets/jungleGaming/png/default/ui/menu/panel_menu.png');
     background-size: 100% 100%;
     background-repeat: no-repeat;
