@@ -1,6 +1,14 @@
-
+/* SHARED BY THE RANKING AND MATCH HISTORY SCREENS (PANEL COMES FROM OptionsScreen.css) */
 .leaderboard-panel {
-  gap: 12px;
+  gap: 10px;
+  /* TALLER PANEL SO A FULL PAGE OF ROWS FITS */
+  aspect-ratio: 384 / 640;
+  padding: 0 24px;
+  box-sizing: border-box;
+}
+
+.leaderboard-panel h1 {
+  margin-bottom: 0;
 }
 
 .leaderboard-config {
@@ -10,7 +18,89 @@
 }
 
 .leaderboard-message {
-  margin: 24px 0;
+  margin: 16px 0;
   color: #fff1c4;
   font-size: 16px;
+  text-align: center;
+}
+
+.leaderboard-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.leaderboard-table {
+  width: min(100%, 320px);
+  border-collapse: collapse;
+  color: #fff1c4;
+  font-size: 14px;
+}
+
+.leaderboard-table th {
+  color: #f3d38a;
+  font-size: 12px;
+  text-transform: uppercase;
+  padding: 4px 6px;
+  border-bottom: 2px solid rgba(243, 211, 138, 0.5);
+}
+
+.leaderboard-table td {
+  padding: 5px 6px;
+  text-align: center;
+  border-bottom: 1px solid rgba(243, 211, 138, 0.15);
+}
+
+/* PLAYER NAMES CAN BE LONG: CUT WITH "…" INSTEAD OF BREAKING THE TABLE */
+.leaderboard-table td:nth-child(2) {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.leaderboard-own-row td {
+  color: #ffff51;
+  font-weight: bold;
+}
+
+.leaderboard-pagination {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.leaderboard-page-button {
+  width: 100px;
+  height: 44px;
+}
+
+.leaderboard-page-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+  transform: none;
+}
+
+.leaderboard-page-label {
+  color: #f3d38a;
+  font-size: 13px;
+  min-width: 80px;
+  text-align: center;
+}
+
+.leaderboard-updating {
+  min-height: 1em;
+  margin: 0;
+  color: #f3d38a;
+  font-size: 12px;
+}
+
+/* READ BY SCREEN READERS, HIDDEN ON SCREEN */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }

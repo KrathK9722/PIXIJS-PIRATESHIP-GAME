@@ -16,8 +16,11 @@ Sail between islands, sink enemy ships and score as many points as you can befor
 | Game rendering        | PixiJS 8                        |
 | Build tool            | Vite                            |
 | Linting               | ESLint + typescript-eslint      |
+| Ranking/history remote state | TanStack Query 5         |
+| HTTP client           | Axios                           |
+| API mocking           | MSW 3 (also runs in the published build) |
 
-TanStack Query, Axios, MSW and Playwright are installed as dependencies but are **not integrated yet** (see [Project status](#project-status)).
+Playwright is installed, but there are no E2E tests yet (see [Project status](#project-status)).
 
 ---
 
@@ -150,8 +153,41 @@ Like the other options, it is saved locally and applies when a new match starts.
 | -------------------------------- | --------------------------------- |
 | `pirate-battle.options.v1`       | Player options                    |
 | `pirate-battle.latest-result.v1` | Result of the last finished match |
+| `pirate-battle.pending-matches.v1` | Finished matches waiting to be registered on the server |
+| `pirate-battle.mock-db.v1`       | Matches confirmed by the mock server (your ranking/history entries) |
+| `pirate-battle.fixture-seed.v1`  | Seed used to generate the fake rival players |
 
-To reset everything, clear these keys in your browser DevTools (**Application → Local Storage**).
+To reset everything, clear these keys in your browser DevTools (**Application → Local Storage**). Clearing `pirate-battle.mock-db.v1` and `pirate-battle.pending-matches.v1` empties your ranking and history; clearing `pirate-battle.fixture-seed.v1` generates new rivals.
+
+---
+
+## Ranking and Match History
+
+Open them with the **Ranking** and **Match History** buttons in the main menu.
+
+- **Ranking:** only compares matches played with the **same configuration** as your current Options (shown at the top, e.g. `120 s · spawn 4 s`). Order: higher score, then shorter duration, then earlier date, then match ID, so ties always resolve the same way. Your entries are shown as **"You"** and highlighted.
+- **Match History:** your matches, newest first, with date, score, duration and how the match ended.
+- Both tabs are paginated and show loading, empty and error states (with **Try again**). They refresh every time they are opened and after a match is registered.
+
+### Match registration
+
+When a match ends, the result screen registers it automatically and shows its status (saving, saved or failed, with a **Retry** button).
+
+- The match is queued in local storage **before** it is sent and only removed once the server confirms it. Failed matches are sent again when the game opens and when the browser gets its connection back, so they survive a refresh.
+- Sending the same match again (repeated clicks, a retry after a timeout) never creates a duplicate: the server returns the existing record.
+- You can start a new match while a registration is still pending.
+
+### Mock API
+
+The API is mocked with MSW in the browser, in development and in the published build. Rival players are generated from a seed that is drawn once per browser and saved in `pirate-battle.fixture-seed.v1`: each browser sees different rivals, but the ranking stays the same between refreshes. Write a known number to that key before loading the page to reproduce a dataset.
+
+| Method | Route                                  | Description                                                        |
+| ------ | -------------------------------------- | ------------------------------------------------------------------ |
+| GET    | `/api/ranking?durationSeconds=&spawnIntervalSeconds=&page=&pageSize=` | Paginated ranking for one configuration |
+| GET    | `/api/players/:playerId/matches?page=&pageSize=` | Paginated match history of a player, newest first        |
+| POST   | `/api/matches`                         | Registers a finished match. Idempotent by `matchId` (201 new, 200 existing) |
+
+To simulate a failure, open DevTools → **Network** and choose **Offline**, then finish a match or open a tab. Configurable network scenarios (slow responses, timeouts, 4xx/5xx) are not implemented yet.
 
 ---
 
@@ -159,7 +195,8 @@ To reset everything, clear these keys in your browser DevTools (**Application �
 
 ```
 src/
-├── App.tsx                       # Screen navigation (menu, options, game, result)
+├── main.tsx                      # Starts MSW, then renders the app inside the Query provider
+├── App.tsx                       # Screen navigation and pending match sync
 ├── components/
 │   ├── Experience/
 │   │   ├── PixiGame.tsx          # PixiJS application, textures and rendering
@@ -168,11 +205,21 @@ src/
 │   │       ├── simulation.ts     # Time-based game rules (movement, combat, spawns)
 │   │       ├── input.ts          # Keyboard input
 │   │       └── ...               # HUD, islands, time helpers
-│   └── Levels/                   # React screens: MainMenu, Options, Game, Result
-├── services/                     # Local storage for options and results
-├── mocks/                        # MSW handlers and fixtures (not implemented yet)
-└── types/types.ts                # Shared types
+│   └── Levels/                   # React screens: MainMenu, Options, Game, Result,
+│                                 # Ranking, MatchHistory (+ shared LeaderboardParts)
+├── services/
+│   ├── api.ts                    # Axios client and API calls
+│   ├── queries.ts                # TanStack Query client, hooks and match registration
+│   ├── pendingMatches.ts         # Queue of matches waiting to be registered
+│   ├── player.ts                 # Local player ID and name
+│   └── ...                       # Local storage for options and results
+├── mocks/
+│   ├── fixtures.ts               # Seeded fake rival players
+│   ├── handlers.ts               # Mock REST API (ranking, history, register match)
+│   └── browser.ts                # MSW worker setup
+└── types/types.ts                # Shared types and API contracts
 public/assets/                    # Game assets (see CREDITS.md)
+public/mockServiceWorker.js       # MSW service worker (generated by `npx msw init public`)
 ```
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the React/PixiJS integration, simulation loop and lifecycle decisions.
@@ -197,12 +244,14 @@ This project was built within a limited time frame of two days, while I was lear
 - Manual pause and automatic pause on focus loss or hidden tab
 - Last match result saved locally
 - Pixi application cleanup on unmount (works with React Strict Mode)
+- Ranking and Match History tabs with pagination and loading, empty and error states (TanStack Query + Axios)
+- Mock REST API with MSW, working in development and in the published build
+- Automatic match registration with retries and a pending queue that survives refreshes, without duplicates
 
 ### Not implemented
 
 - Touch controls for mobile
-- Ranking and Match History tabs (TanStack Query + Axios)
-- MSW mocks and network failure scenarios
+- Configurable network failure scenarios (slow, timeout, 4xx/5xx, out-of-order) and a scenario selector
 - Playwright E2E tests and visual regression
 - Performance profiling report
 

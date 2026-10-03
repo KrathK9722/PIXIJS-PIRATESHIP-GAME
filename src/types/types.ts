@@ -97,6 +97,50 @@ export type MatchResult = {
   configuration: PlayerOptions
 }
 
+// ===========================================
+// RANKING AND MATCH HISTORY API CONTRACTS
+// ===========================================
+
+// A MATCH STORED BY THE (MOCKED) SERVER
+export type MatchRecord = MatchResult & {
+  playerName: string
+}
+
+// ONE ROW OF THE RANKING. RANK IS THE POSITION INSIDE THE WHOLE SORTED LIST, NOT THE PAGE
+export type RankingEntry = {
+  rank: number
+  matchId: string
+  playerId: string
+  playerName: string
+  score: number
+  durationSeconds: number
+  completedAt: string
+}
+
+// A PAGE OF RESULTS (page STARTS AT 1)
+export type Page<T> = {
+  items: T[]
+  page: number
+  pageSize: number
+  totalItems: number
+  totalPages: number
+}
+
+// POST /api/matches BODY AND RESPONSE
+export type SubmitMatchRequest = MatchResult & {
+  playerName: string
+}
+
+export type SubmitMatchResponse = {
+  record: MatchRecord
+  // FALSE WHEN THE MATCH WAS ALREADY REGISTERED (A RESEND), SO NOTHING WAS DUPLICATED
+  created: boolean
+}
+
+export type ApiError = {
+  message: string
+}
+
 export type PlayerOptions = {
   matchDurationSeconds: number
   spawnIntervalSeconds: number

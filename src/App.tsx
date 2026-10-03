@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import './App.css'
 import GameScreen from './components/Levels/GameScreen'
 import ResultScreen from './components/Levels/ResultScreen'
@@ -8,6 +8,8 @@ import RankingScreen from './components/Levels/RankingScreen'
 import MatchHistoryScreen from './components/Levels/MatchHistoryScreen'
 import type { MatchResult } from './types/types'
 import { saveLatestResult } from './services/resultStorage'
+import { addPendingMatch, loadPendingMatches, toSubmitRequest } from './services/pendingMatches'
+import { useSubmitMatch } from './services/queries'
 
 type Screen = 'menu' | 'options' | 'game' | 'result' | 'ranking' | 'history'
 
@@ -15,6 +17,18 @@ function App() {
   const [screen, setScreen] = useState<Screen>('menu')
   const [latestResult, setLatestResult] = useState<MatchResult | null>(null)
   const [resultSavedLocally, setResultSavedLocally] = useState(true)
+  const { mutate: submitPendingMatch } = useSubmitMatch()
+
+  // SEND MATCHES LEFT PENDING BY AN EARLIER FAILURE OR REFRESH
+  useEffect(() => {
+    function sendPendingMatches() {
+      for (const match of loadPendingMatches()) submitPendingMatch(match)
+    }
+
+    sendPendingMatches()
+    window.addEventListener('online', sendPendingMatches)
+    return () => window.removeEventListener('online', sendPendingMatches)
+  }, [submitPendingMatch])
 
   return (
     <main>
@@ -37,6 +51,7 @@ function App() {
         <GameScreen
           onMatchEnd={(result) => {
             setResultSavedLocally(saveLatestResult(result))
+            addPendingMatch(toSubmitRequest(result))
             setLatestResult(result)
             setScreen('result')
           }}
