@@ -31,9 +31,7 @@ import { ISLAND_TILE_IDS } from './config/island'
 import { createRandomIslands } from './config/createRandomIslands'
 import { getRandomInteger } from './config/random'
 
-const PLAYER_TEXTURE_URLS = Array.from(
-  { length: 4 },
-  (_, damageState) =>
+const PLAYER_TEXTURE_URLS = Array.from({ length: 4 },(_, damageState) =>
     `/assets/kenney_piratePack/PNG/Default size/Ships/ship (${1 + damageState * 6}).png`,
 )
 
@@ -82,6 +80,7 @@ function createInitialSimulationState(
       boatColor: getRandomInteger(3, 6),
       alive: true,
       shootCooldown: ENEMY_SHOOT_INTERVAL_SECONDS,
+      crashCooldown: 0,
       deathElapsedSeconds: null,
     }],
     islands: createRandomIslands(
@@ -312,12 +311,19 @@ function PixiGame(props: PixiGameProps) {
       const islandTextureMap = new Map(
         ISLAND_TILE_IDS.map((tileId, index) => [tileId, islandTileTextures[index]]),
       )
-      worldContainer.addChild(createIslandDisplay(
+      const { waterLayer, islandLayer } = createIslandDisplay(
         islandTextureMap,
         MOVEMENT_CONFIG.arenaWidth,
         MOVEMENT_CONFIG.arenaHeight,
         state.islands,
-      ))
+      )
+      worldContainer.addChild(waterLayer)
+
+      // CREATE WAVES (BETWEEN WATER AND ISLANDS SO THEY NEVER DRAW OVER LAND)
+      const ripplesGraphics = new Graphics()
+      worldContainer.addChild(ripplesGraphics)
+
+      worldContainer.addChild(islandLayer)
       const islandCollisionPreview = new Graphics()
       // DRAW THE ISLAND HITBOX (ROUNDRECT) FOR DEBUG
       for (const island of state.islands) {
@@ -346,9 +352,6 @@ function PixiGame(props: PixiGameProps) {
         shakeStrength = Math.max(shakeStrength, strength)
       }
 
-      // CREATE WAVES
-      const ripplesGraphics = new Graphics()
-      worldContainer.addChild(ripplesGraphics)
       // CREATE BULLET HITBOXES
       const bulletHitBoxGraphics = new Graphics()
       worldContainer.addChild(bulletHitBoxGraphics)
@@ -554,15 +557,28 @@ function PixiGame(props: PixiGameProps) {
         for (const ripple of state.ripples) {
           const progress = ripple.age / 0.5
 
-          const radius = BULLET_RADIUS + progress * getRandomInteger(7,14)
+          const radius = BULLET_RADIUS + progress * 14
           const alpha = 1 - progress
 
           ripplesGraphics
             .circle(ripple.x, ripple.y, radius)
             .stroke({
-              color: 0xbdefff,
+              color: 0x1b5e7a,
+              width: 4,
+              alpha: alpha * 0.6,
+            })
+            .circle(ripple.x, ripple.y, radius)
+            .stroke({
+              color: 0xffffff,
               width: 2,
               alpha,
+            })
+            // SMALLER INNER RING FOR A SPLASH LOOK
+            .circle(ripple.x, ripple.y, radius * 0.5)
+            .stroke({
+              color: 0xffffff,
+              width: 1.5,
+              alpha: alpha * 0.8,
             })
         }
 

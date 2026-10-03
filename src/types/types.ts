@@ -19,6 +19,7 @@ export type EnemyState = {
   boatColor: number
   alive: boolean
   shootCooldown: number
+  crashCooldown: number
   deathElapsedSeconds: number | null
 }
 

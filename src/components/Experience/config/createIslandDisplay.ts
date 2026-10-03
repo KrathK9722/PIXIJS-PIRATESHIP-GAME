@@ -43,8 +43,10 @@ export function createIslandDisplay(
   arenaWidth: number,
   arenaHeight: number,
   islands: IslandState[],
-): Container {
-  const islandDisplay = new Container()
+): { waterLayer: Container; islandLayer: Container } {
+  // WATER AND ISLANDS ARE SEPARATE LAYERS SO WATER EFFECTS (RIPPLES) CAN SIT BETWEEN THEM
+  const waterLayer = new Container()
+  const islandLayer = new Container()
   const water = textures.get(WATER_TILE_ID)
 
   if (water === undefined) {
@@ -57,17 +59,17 @@ export function createIslandDisplay(
     for (let column = 0; column < columns; column++) {
       const waterTile = new Sprite(water)
       waterTile.position.set(column * ISLAND_TILE_SIZE, row * ISLAND_TILE_SIZE)
-      islandDisplay.addChild(waterTile)
+      waterLayer.addChild(waterTile)
     }
   }
 
   // DRAW EACH ISLAND LAYER BY LAYER (SEABED, SAND, GRASS AND DECORATION ON TOP)
   for (const island of islands) {
-    addTileMatrix(islandDisplay, ISLAND_SEABED_TILES, textures, island.x, island.y)
-    addTileMatrix(islandDisplay, ISLAND_SAND_TILES, textures, island.x, island.y)
-    addTileMatrix(islandDisplay, ISLAND_GRASS_TILES, textures, island.x, island.y)
-    addTileMatrix(islandDisplay, island.decorationTiles, textures, island.x, island.y)
+    addTileMatrix(islandLayer, ISLAND_SEABED_TILES, textures, island.x, island.y)
+    addTileMatrix(islandLayer, ISLAND_SAND_TILES, textures, island.x, island.y)
+    addTileMatrix(islandLayer, ISLAND_GRASS_TILES, textures, island.x, island.y)
+    addTileMatrix(islandLayer, island.decorationTiles, textures, island.x, island.y)
   }
 
-  return islandDisplay
+  return { waterLayer, islandLayer }
 }

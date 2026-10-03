@@ -80,6 +80,9 @@ The game also **pauses automatically** when the window loses focus or the tab is
 - **Player:** 12 health. Moves forward and rotates. Fires a front shot and three-bullet side volleys.
 - **Chaser:** chases the player and explodes on contact, dealing 3 damage. A Chaser that explodes on the player **does not** award points.
 - **Shooter:** approaches the player, keeps a preferred distance, and fires aimed shots when within range.
+- **Enemy spawns:** enemies spawn off-screen and sail into the arena. Each spawn is picked at random between the two valid points farthest from the player, so there is no single spawn to camp. Shooters only fire after entering the arena.
+- **Enemy avoidance:** enemies steer away from each other while chasing the player.
+- **Enemy crashes:** when two enemies collide, each loses 1 health (with a 1 second cooldown between crashes). An enemy destroyed by a crash **does not** award points.
 - **Islands:** block ships and projectiles.
 - **Scoring:** each enemy destroyed by the player's shots is worth 1 point.
 - **End of match:** when the timer reaches zero or the player's health reaches zero.
@@ -103,11 +106,16 @@ You can change these values there without touching the game systems:
 | `ENEMY_MAX_HEALTH`                  | 3            | Enemy health                            |
 | `ENEMY_CHASER_SPEED`                | 110 px/s     | Chaser speed                            |
 | `ENEMY_SHOOTER_SPEED`               | 78 px/s      | Shooter speed                           |
-| `ENEMY_SHOOTER_RANGE`               | 360 px       | Shooter attack range                    |
+| `ENEMY_SHOOTER_RANGE`               | 320 px       | Shooter attack range                    |
 | `ENEMY_SHOOTER_PREFERRED_DISTANCE`  | 220 px       | Distance the Shooter tries to keep      |
 | `ENEMY_SHOOT_INTERVAL_SECONDS`      | 1.5 s        | Shooter cooldown                        |
 | `ENEMY_COLLISION_DAMAGE`            | 3            | Chaser explosion damage                 |
 | `ENEMY_SPAWN_SAFE_DISTANCE`         | 220 px       | Minimum spawn distance from the player  |
+| `ENEMY_SPAWN_OFFSCREEN_MARGIN`      | 64 px        | How far outside the arena enemies spawn |
+| `ENEMY_AVOID_DISTANCE`              | 120 px       | Distance at which enemies avoid each other |
+| `ENEMY_AVOID_STRENGTH`              | 1.5          | Avoidance strength compared to chasing  |
+| `ENEMY_CRASH_DAMAGE`                | 1            | Damage each enemy takes in a crash      |
+| `ENEMY_CRASH_COOLDOWN_SECONDS`      | 1 s          | Time before an enemy can take crash damage again |
 | `BULLET_SPEED`                      | 400 px/s     | Projectile speed                        |
 
 ### Options screen
@@ -118,9 +126,23 @@ The **Options** screen exposes two player settings. They are validated and saved
 | --------------------- | ------- | -------------------- |
 | Game session time     | 120 s   | 60 – 180 s (integer) |
 | Enemy spawn time      | 4 s     | 1 – 15 s             |
+| Debug                 | Off     | On / Off             |
 
 
 Each match takes a snapshot of the options when it starts. Changes only apply to the next match.
+
+### Debug mode
+
+Turn on **Debug** in the Options screen to see the collision shapes during a match:
+
+| Color                  | Shape   | Meaning                                |
+| ---------------------- | ------- | -------------------------------------- |
+| Red rounded rectangle  | Islands | Area that blocks ships and projectiles |
+| Red box                | Ships   | Hurtbox: area that takes damage        |
+| Yellow capsule outline | Ships   | Hitbox: area used to push ships apart  |
+| Green circle           | Bullets | Bullet hit area                        |
+
+Like the other options, it is saved locally and applies when a new match starts.
 
 ### Local storage keys
 
@@ -159,7 +181,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the React/PixiJS integration, simulat
 
 ## Project status
 
-This project was built within a limited time frame of two days at the same time that i was learning how to use TypeScript, React and PixiJS. Here is what is done and what is not.
+This project was built within a limited time frame of two days, while I was learning TypeScript, React and PixiJS. Here is what is done and what is not.
 
 ### Done
 
@@ -167,6 +189,7 @@ This project was built within a limited time frame of two days at the same time 
 - Options validation and persistence after refresh
 - Player movement, rotation, front shot and side volleys
 - Chaser and Shooter enemies with spawn interval and safe spawn distance
+- Off-screen enemy spawns, enemy avoidance and enemy-to-enemy collisions with crash damage
 - Islands that block ships and projectiles
 - Health bars, score, timer and visual ship damage
 - Shot, explosion and destruction effects
@@ -200,4 +223,4 @@ The game is deployed on **Vercel** as a static Vite site.
 
 ## Credits
 
-Some ssets were supplied by the challenge and some were from itch.io. See [CREDITS.md](CREDITS.md).
+Some assets were supplied by the challenge and others come from itch.io. See [CREDITS.md](CREDITS.md).

@@ -3,7 +3,8 @@ import {
   BULLET_RADIUS, BULLET_SPEED, ENEMY_CHASER_SPEED, ENEMY_COLLISION_DAMAGE,
   ENEMY_HEIGHT, ENEMY_MAX_HEALTH, ENEMY_ROTATION_SPEED, ENEMY_SHOOTER_PREFERRED_DISTANCE,
   ENEMY_SHOOTER_RANGE, ENEMY_SHOOTER_SPEED, ENEMY_SHOOT_INTERVAL_SECONDS, ENEMY_WIDTH,
-  ENEMY_SPAWN_SAFE_DISTANCE, PLAYER_HEIGHT, PLAYER_WIDTH,
+  ENEMY_SPAWN_OFFSCREEN_MARGIN, ENEMY_SPAWN_SAFE_DISTANCE, PLAYER_HEIGHT, PLAYER_WIDTH,
+  ENEMY_AVOID_DISTANCE, ENEMY_AVOID_STRENGTH, ENEMY_CRASH_COOLDOWN_SECONDS, ENEMY_CRASH_DAMAGE,
 } from './config'
 
 // DETECT BULLET HITS BOAT FUNCTION
@@ -170,6 +171,7 @@ function getClosestSegmentPoints(
 function separateBoatCapsules(
     player: { x: number; y: number; rotation: number },
     enemy: { x: number; y: number; rotation: number },
+    enemyPushShare = 0,
 ): boolean {
     const playerSegment = getCapsuleSegment(
         player,
@@ -218,8 +220,10 @@ function separateBoatCapsules(
     }
 
     const overlap = minimumDistance - distance
-    player.x += normalX * overlap
-    player.y += normalY * overlap
+    player.x += normalX * overlap * (1 - enemyPushShare)
+    player.y += normalY * overlap * (1 - enemyPushShare)
+    enemy.x -= normalX * overlap * enemyPushShare
+    enemy.y -= normalY * overlap * enemyPushShare
     return true
 }
 
@@ -228,9 +232,6 @@ function wrapAngle(angle: number): number {
   return Math.atan2(Math.sin(angle), Math.cos(angle))
 }
 
-// A ROUNDRECT IS THE SAME AS A SMALLER RECTANGLE (THE "CORE")
-// WITH A BORDER OF SIZE cornerRadius AROUND IT.
-// THIS FUNCTION FINDS THE POINT OF THE CORE THAT IS CLOSEST TO (x, y)
 function getClosestPointOnIslandCore(x: number, y: number, hitBox: RoundRectHitBox): Point {
   const coreLeft = hitBox.x + hitBox.cornerRadius
   const coreRight = hitBox.x + hitBox.width - hitBox.cornerRadius
@@ -243,7 +244,7 @@ function getClosestPointOnIslandCore(x: number, y: number, hitBox: RoundRectHitB
   }
 }
 
-// CHECK IF A CIRCLE TOUCHES THE ISLAND HITBOX (ROUNDRECT)
+// CHECK IF A CIRCLE TOUCHES THE ISLAND HITBOX
 export function circleOverlapsIsland(
   x: number,
   y: number,
@@ -268,7 +269,7 @@ function circleOverlapsAnyIsland(
   return false
 }
 
-// HOW MUCH A CIRCLE MUST MOVE TO GET OUT OF THE ISLAND (0, 0 = IT'S NOT TOUCHING)
+// HOW MUCH A CIRCLE MUST MOVE TO GET OUT OF THE ISLAND
 function getIslandPushForCircle(
   x: number,
   y: number,
@@ -311,9 +312,7 @@ function getIslandPushForCircle(
   return { x: normalX * overlap, y: normalY * overlap }
 }
 
-// PUSH THE BOAT CAPSULE (YELLOW HITBOX) OUT OF ALL ISLANDS
-// WE PUT 5 CIRCLES ALONG THE BOAT (BACK, MIDDLE AND FRONT) TO MAKE THE CAPSULE SHAPE
-// AND PUSH THE BOAT BY THE CIRCLE THAT IS DEEPEST INSIDE THE ISLAND
+// PUSH THE BOAT CAPSULE OUT OF ALL ISLANDS
 function pushBoatOutOfIslands(
   boat: { x: number; y: number; rotation: number },
   width: number,
@@ -345,7 +344,7 @@ function pushBoatOutOfIslands(
   }
 }
 
-// CLOSEST POINT OF A LINE (FROM start TO end) TO ANOTHER POINT
+// CLOSEST POINT OF A LINE TO ANOTHER POINT
 function getClosestPointOnSegment(start: Point, end: Point, point: Point): Point {
   const segmentX = end.x - start.x
   const segmentY = end.y - start.y
@@ -365,7 +364,7 @@ function getClosestPointOnSegment(start: Point, end: Point, point: Point): Point
 }
 
 // WHERE THE ENEMY SHOULD GO:
-// IF AN ISLAND IS BETWEEN THE ENEMY AND THE PLAYER, GO TO A POINT BESIDE THE ISLAND (GO AROUND IT).
+// IF AN ISLAND IS BETWEEN THE ENEMY AND THE PLAYER, GO TO A POINT BESIDE THE ISLAND
 // OTHERWISE, GO STRAIGHT TO THE PLAYER
 function getEnemyTarget(
   enemy: { x: number; y: number },
@@ -381,7 +380,7 @@ function getEnemyTarget(
       y: hitBox.y + hitBox.height / 2,
     }
 
-    // IS THE ISLAND IN THE WAY? (THE LINE ENEMY -> PLAYER PASSES THROUGH IT)
+    // IS THE ISLAND IN THE WAY
     const closestPointOnPath = getClosestPointOnSegment(enemy, player, islandCenter)
     const islandIsInTheWay = circleOverlapsIsland(
       closestPointOnPath.x,
@@ -411,7 +410,7 @@ function getEnemyTarget(
     let targetX = islandCenter.x + sideX * side * passDistance
     let targetY = islandCenter.y + sideY * side * passDistance
 
-    // IF THAT SIDE IS OUTSIDE THE ARENA (ISLAND NEAR THE EDGE), USE THE OTHER SIDE
+    // IF THAT SIDE IS OUTSIDE THE ARENA USE THE OTHER SIDE
     const isOutsideArena = targetX < 0 || targetX > arenaWidth || targetY < 0 || targetY > arenaHeight
     if (isOutsideArena) {
       side = -side
@@ -425,7 +424,7 @@ function getEnemyTarget(
   return { x: player.x, y: player.y }
 }
 
-// CHECK IF A POINT IS INSIDE THE BOAT HURTBOX (RED RECTANGLE)
+// CHECK IF A POINT IS INSIDE THE BOAT HURTBOX
 function pointInsideHurtBox(
   point: Point,
   boat: { x: number; y: number; rotation: number },
@@ -443,7 +442,6 @@ function pointInsideHurtBox(
   return Math.abs(localX) <= width / 2 && Math.abs(localY) <= height / 2
 }
 
-// GET THE 4 CORNERS AND THE 4 MIDDLE OF SIDES OF THE BOAT HURTBOX
 function getHurtBoxPoints(
   boat: { x: number; y: number; rotation: number },
   width: number,
@@ -486,36 +484,47 @@ function hurtBoxesOverlap(
 
 function createEnemy(state: SimulationState, type: EnemyState['type']): EnemyState {
   const { arenaWidth, arenaHeight } = state.config
+  // SPAWN POINTS ARE OUTSIDE THE VISIBLE ARENA
+  const margin = ENEMY_SPAWN_OFFSCREEN_MARGIN
   const spawnPoints = [
-    { x: 48, y: 48 }, { x: arenaWidth / 2, y: 40 }, { x: arenaWidth - 48, y: 48 },
-    { x: 48, y: arenaHeight / 2 }, { x: arenaWidth - 48, y: arenaHeight / 2 },
-    { x: 48, y: arenaHeight - 48 }, { x: arenaWidth / 2, y: arenaHeight - 40 },
-    { x: arenaWidth - 48, y: arenaHeight - 48 },
+    { x: 48, y: -margin }, { x: arenaWidth / 2, y: -margin }, { x: arenaWidth - 48, y: -margin },
+    { x: -margin, y: arenaHeight / 2 }, { x: arenaWidth + margin, y: arenaHeight / 2 },
+    { x: 48, y: arenaHeight + margin }, { x: arenaWidth / 2, y: arenaHeight + margin },
+    { x: arenaWidth - 48, y: arenaHeight + margin },
   ]
-  const islandSafePoints = spawnPoints.filter((point) =>
-    !circleOverlapsAnyIsland(point.x, point.y, ENEMY_HEIGHT / 2, state.islands),
-  )
+  // THE POINT WHERE THE ENEMY ENTERS THE ARENA MUST NOT BE BLOCKED BY AN ISLAND
+  const islandSafePoints = spawnPoints.filter((point) => {
+    const entryX = Math.max(ENEMY_HEIGHT / 2, Math.min(arenaWidth - ENEMY_HEIGHT / 2, point.x))
+    const entryY = Math.max(ENEMY_HEIGHT / 2, Math.min(arenaHeight - ENEMY_HEIGHT / 2, point.y))
+    return !circleOverlapsAnyIsland(entryX, entryY, ENEMY_HEIGHT / 2, state.islands)
+  })
   const safePoints = islandSafePoints.filter((point) =>
     Math.hypot(point.x - state.player.x, point.y - state.player.y) >= ENEMY_SPAWN_SAFE_DISTANCE,
   )
   const candidates = safePoints.length > 0
     ? safePoints
     : islandSafePoints.length > 0 ? islandSafePoints : spawnPoints
-  const spawn = candidates.reduce((farthest, point) =>
-    Math.hypot(point.x - state.player.x, point.y - state.player.y) >
-      Math.hypot(farthest.x - state.player.x, farthest.y - state.player.y) ? point : farthest,
-  )
+    
+  // PICK RANDOMLY BETWEEN THE TWO FARTHEST POINTS 
+  const distanceToPlayer = (point: { x: number; y: number }) =>
+    Math.hypot(point.x - state.player.x, point.y - state.player.y)
+  const farthestTwo = [...candidates]
+    .sort((a, b) => distanceToPlayer(b) - distanceToPlayer(a))
+    .slice(0, 2)
+  const spawn = farthestTwo[Math.floor(Math.random() * farthestTwo.length)]
 
   return {
     id: state.nextEnemyId++,
     type,
     x: spawn.x,
     y: spawn.y,
-    rotation: 0,
+    // START FACING THE ARENA CENTER SO IT SAILS STRAIGHT IN
+    rotation: Math.atan2(arenaWidth / 2 - spawn.x, -(arenaHeight / 2 - spawn.y)),
     health: ENEMY_MAX_HEALTH,
     boatColor: type === 'shooter' ? 2 : Math.floor(Math.random() * 4) + 3,
     alive: true,
     shootCooldown: ENEMY_SHOOT_INTERVAL_SECONDS,
+    crashCooldown: 0,
     deathElapsedSeconds: null,
   }
 }
@@ -590,7 +599,8 @@ export function updateSimulation(
       player.x += Math.sin(player.rotation) * config.moveSpeed * deltaSeconds
       player.y -= Math.cos(player.rotation) * config.moveSpeed * deltaSeconds
     }
-    // MOVE AND TURN FREELY, THEN PUSH THE BOAT OUT IF IT WENT INTO AN ISLAND
+
+    // MOVE AND TURN FREELY THEN PUSH THE BOAT OUT IF IT WENT INTO AN ISLAND
     pushBoatOutOfIslands(player, PLAYER_WIDTH, PLAYER_HEIGHT, state.islands)
     player.x = Math.max(config.playerRadius, Math.min(config.arenaWidth - config.playerRadius, player.x))
     player.y = Math.max(config.playerRadius, Math.min(config.arenaHeight - config.playerRadius, player.y))
@@ -635,10 +645,26 @@ export function updateSimulation(
     const dy = player.y - enemy.y
     const distance = Math.max(0.001, Math.hypot(dx, dy))
 
-    // AIM AT THE PLAYER, OR AT A POINT BESIDE THE ISLAND IF IT IS IN THE WAY
+    // AIM AT THE PLAYER OR AT A POINT BESIDE THE ISLAND IF IT IS IN THE WAY
     const target = getEnemyTarget(enemy, player, state.islands, config.arenaWidth, config.arenaHeight)
     const isGoingAroundIsland = target.x !== player.x || target.y !== player.y
-    const targetRotation = Math.atan2(target.x - enemy.x, -(target.y - enemy.y))
+
+    // STEERING: DIRECTION TO THE TARGET + A PUSH AWAY FROM NEARBY ENEMIES (TRY NOT TO CRASH)
+    const targetDistance = Math.max(0.001, Math.hypot(target.x - enemy.x, target.y - enemy.y))
+    let steerX = (target.x - enemy.x) / targetDistance
+    let steerY = (target.y - enemy.y) / targetDistance
+    for (const other of state.enemies) {
+      if (other === enemy || !other.alive) continue
+      const awayX = enemy.x - other.x
+      const awayY = enemy.y - other.y
+      const otherDistance = Math.hypot(awayX, awayY)
+      if (otherDistance >= ENEMY_AVOID_DISTANCE || otherDistance < 0.001) continue
+      // THE CLOSER THE OTHER ENEMY IS, THE STRONGER THE PUSH (0 AT THE LIMIT, 1 WHEN TOUCHING)
+      const closeness = 1 - otherDistance / ENEMY_AVOID_DISTANCE
+      steerX += (awayX / otherDistance) * closeness * ENEMY_AVOID_STRENGTH
+      steerY += (awayY / otherDistance) * closeness * ENEMY_AVOID_STRENGTH
+    }
+    const targetRotation = Math.atan2(steerX, -steerY)
     const rotationDelta = wrapAngle(targetRotation - enemy.rotation)
     enemy.rotation += Math.max(
       -ENEMY_ROTATION_SPEED * deltaSeconds,
@@ -654,16 +680,30 @@ export function updateSimulation(
       movementDirection = -1
     }
 
+    const previousX = enemy.x
+    const previousY = enemy.y
     const speed = enemy.type === 'chaser' ? ENEMY_CHASER_SPEED : ENEMY_SHOOTER_SPEED
     enemy.x += Math.sin(enemy.rotation) * speed * movementDirection * deltaSeconds
     enemy.y -= Math.cos(enemy.rotation) * speed * movementDirection * deltaSeconds
     pushBoatOutOfIslands(enemy, ENEMY_WIDTH, ENEMY_HEIGHT, state.islands)
-    enemy.x = Math.max(config.enemyRadius, Math.min(config.arenaWidth - config.enemyRadius, enemy.x))
-    enemy.y = Math.max(config.enemyRadius, Math.min(config.arenaHeight - config.enemyRadius, enemy.y))
+
+    // KEEP ENEMIES IN THE ARENA AFTER GETTING INSIDE IT
+    const minX = Math.min(config.enemyRadius, previousX)
+    const maxX = Math.max(config.arenaWidth - config.enemyRadius, previousX)
+    const minY = Math.min(config.enemyRadius, previousY)
+    const maxY = Math.max(config.arenaHeight - config.enemyRadius, previousY)
+    enemy.x = Math.max(minX, Math.min(maxX, enemy.x))
+    enemy.y = Math.max(minY, Math.min(maxY, enemy.y))
+
+    const isInsideArena = enemy.x >= 0 && enemy.x <= config.arenaWidth &&
+      enemy.y >= 0 && enemy.y <= config.arenaHeight
+
+    enemy.crashCooldown = Math.max(0, enemy.crashCooldown - deltaSeconds)
 
     if (enemy.type === 'shooter') {
       enemy.shootCooldown = Math.max(0, enemy.shootCooldown - deltaSeconds)
-      if (distance <= ENEMY_SHOOTER_RANGE && enemy.shootCooldown <= 0) {
+      // NO SHOOTING FROM OFF-SCREEN
+      if (isInsideArena && distance <= ENEMY_SHOOTER_RANGE && enemy.shootCooldown <= 0) {
         state.bullets.push({
           x: enemy.x + Math.sin(enemy.rotation) * (ENEMY_HEIGHT / 2 + BULLET_RADIUS),
           y: enemy.y - Math.cos(enemy.rotation) * (ENEMY_HEIGHT / 2 + BULLET_RADIUS),
@@ -675,16 +715,47 @@ export function updateSimulation(
       }
     }
 
-    // HURTBOX (RED) = DAMAGE. CHECK IT BEFORE THE BOATS ARE PUSHED APART
+    // HURTBOX (RED) = DAMAGE - CHECKS IT BEFORE THE BOATS ARE PUSHED 
     const touchedHurtBox = hurtBoxesOverlap(player, enemy)
 
-    // HITBOX (YELLOW CAPSULE) = COLLISION. ONLY PUSHES THE BOATS APART
+    // HITBOX (YELLOW CAPSULE) = COLLISION - ONLY PUSHES THE BOATS 
     separateBoatCapsules(player, enemy)
 
     if (touchedHurtBox && enemy.type === 'chaser') {
       damagePlayer(state, ENEMY_COLLISION_DAMAGE)
       destroyEnemy(state, enemy, false)
     }
+  }
+
+  // ENEMIES COLLIDE WITH EACH OTHER: BOTH ARE PUSHED HALF OF THE OVERLAP AND TAKE CRASH DAMAGE
+  // ONLY ALIVE ENEMIES FULLY INSIDE THE ARENA (OFF-SCREEN ONES ARE STILL SAILING IN)
+  const isFullyInsideArena = (enemy: EnemyState) =>
+    enemy.x >= config.enemyRadius && enemy.x <= config.arenaWidth - config.enemyRadius &&
+    enemy.y >= config.enemyRadius && enemy.y <= config.arenaHeight - config.enemyRadius
+  const collidingEnemies = state.enemies.filter((enemy) => enemy.alive && isFullyInsideArena(enemy))
+  for (let first = 0; first < collidingEnemies.length; first++) {
+    for (let second = first + 1; second < collidingEnemies.length; second++) {
+      const firstEnemy = collidingEnemies[first]
+      const secondEnemy = collidingEnemies[second]
+      // AN ENEMY DESTROYED BY AN EARLIER CRASH THIS FRAME NO LONGER COLLIDES
+      if (!firstEnemy.alive || !secondEnemy.alive) continue
+      const crashed = separateBoatCapsules(firstEnemy, secondEnemy, 0.5)
+      if (!crashed) continue
+      for (const crashedEnemy of [firstEnemy, secondEnemy]) {
+        // COOLDOWN SO TOUCHING BOATS DON'T TAKE DAMAGE EVERY FRAME
+        if (crashedEnemy.crashCooldown > 0) continue
+        crashedEnemy.crashCooldown = ENEMY_CRASH_COOLDOWN_SECONDS
+        crashedEnemy.health -= ENEMY_CRASH_DAMAGE
+        // A CRASH IS NOT A PLAYER KILL, SO IT DOES NOT AWARD A POINT
+        if (crashedEnemy.health <= 0) destroyEnemy(state, crashedEnemy, false)
+      }
+    }
+  }
+  // THE PUSH CAN MOVE AN ENEMY INTO AN ISLAND OR OUT OF THE ARENA, SO FIX IT
+  for (const enemy of collidingEnemies) {
+    pushBoatOutOfIslands(enemy, ENEMY_WIDTH, ENEMY_HEIGHT, state.islands)
+    enemy.x = Math.max(config.enemyRadius, Math.min(config.arenaWidth - config.enemyRadius, enemy.x))
+    enemy.y = Math.max(config.enemyRadius, Math.min(config.arenaHeight - config.enemyRadius, enemy.y))
   }
 
   // AN ENEMY CAN PUSH THE PLAYER INTO AN ISLAND, SO PUSH THE PLAYER OUT AGAIN
@@ -719,7 +790,7 @@ export function updateSimulation(
       continue
     }
 
-    // BULLET HITS THE ISLAND HITBOX (ROUNDRECT)
+    // BULLET HITS THE ISLAND HITBOX
     if (circleOverlapsAnyIsland(bullet.x, bullet.y, BULLET_RADIUS, state.islands)) {
       state.ripples.push({ x: bullet.x, y: bullet.y, age: 0 })
       state.bullets.splice(index, 1)
