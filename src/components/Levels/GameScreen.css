@@ -9,6 +9,7 @@
   border-image-width: 32px;
   border-image-repeat: stretch;
 }
+
 .game-screen {
   width: 100%;
   min-height: 100vh;

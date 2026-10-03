@@ -24,6 +24,7 @@ function GameScreen(props: GameScreenProps) {
         <div className="simulation">
         <PixiGame
           matchDurationSeconds={matchOptions.matchDurationSeconds}
+          debugEnabled={matchOptions.debugEnabled}
           onTimeUpdate={setSecondsRemaining}
           onMatchEnd={props.onMatchEnd}
         />

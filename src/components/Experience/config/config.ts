@@ -20,6 +20,7 @@ export const OPTIONS_LIMITS = {
 export const DEFAULT_OPTIONS: PlayerOptions = {
   matchDurationSeconds: 120,
   spawnIntervalSeconds: 4,
+  debugEnabled: false,
 }
 
 // ======================
@@ -28,6 +29,10 @@ export const DEFAULT_OPTIONS: PlayerOptions = {
 export function validateOptions(options: PlayerOptions): string | null {
   const duration = options.matchDurationSeconds
   const spawn = options.spawnIntervalSeconds
+
+  if (typeof options.debugEnabled !== 'boolean') {
+    return 'Debug option must be enabled or disabled.'
+  }
 
   if (
     !Number.isInteger(duration) 

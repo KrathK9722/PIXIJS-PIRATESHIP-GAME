@@ -9,7 +9,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 12px;
+  color: #f3d38a;
 }
 
 .options-menu-button {
@@ -111,13 +111,17 @@
   background-size: cover;
 }
 
+.options-field {
+  color: #f3d38a;
+}
+
 #options-error {
   color: #8b1515;
   max-width: 280px;
 }
 
 .options-menu h1 {
-  color: #18120c;
+  color: #fff1c4;
   font-size: 28px;
   margin: 0 0 12px;
 }
@@ -128,16 +132,58 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  text-align: left;
+  text-align: center;
 }
 
-.options-field input {
-  box-sizing: border-box;
-  width: 100%;
-  padding: 10px;
-  border: 2px solid #594126;
-  border-radius: 6px;
-  background: #fff9eb;
-  color: #18120c;
-  font: inherit;
+.options-stepper {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: 16px;
+}
+
+.options-stepper-value {
+  color: #fff1c4;
+  font-size: 22px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.options-stepper-button {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background-color: transparent;
+  background-image: url('/assets/jungleGaming/png/default/ui/controls/button_round_normal.png');
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+  cursor: pointer;
+}
+
+.options-stepper-button img {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+}
+
+.options-stepper-button:not(:disabled):hover {
+  background-image: url('/assets/jungleGaming/png/default/ui/controls/button_round_hover.png');
+}
+
+.options-stepper-button:not(:disabled):active {
+  background-image: url('/assets/jungleGaming/png/default/ui/controls/button_round_pressed.png');
+}
+
+.options-stepper-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.options-stepper-button:focus-visible {
+  outline: 2px solid #fff1c4;
+  outline-offset: 2px;
 }

@@ -18,9 +18,32 @@ function OptionsScreen(props: OptionsScreenProps) {
   const [spawnInterval, setSpawnInterval] = useState(
     String(initialOptions.spawnIntervalSeconds),
   )
+  const [debugEnabled, setDebugEnabled] = useState(initialOptions.debugEnabled)
 
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
+
+  function changeDuration(amount: number) {
+    const nextValue = Math.min(
+      OPTIONS_LIMITS.durationMax,
+      Math.max(OPTIONS_LIMITS.durationMin, Number(duration) + amount),
+    )
+
+    setDuration(String(nextValue))
+    setError(null)
+    setSaved(false)
+  }
+
+  function changeSpawnInterval(amount: number) {
+    const nextValue = Math.min(
+      OPTIONS_LIMITS.spawnMax,
+      Math.max(OPTIONS_LIMITS.spawnMin, Number(spawnInterval) + amount),
+    )
+
+    setSpawnInterval(String(nextValue))
+    setError(null)
+    setSaved(false)
+  }
 
   function handleSave(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -31,6 +54,7 @@ function OptionsScreen(props: OptionsScreenProps) {
     const options = {
       matchDurationSeconds: Number(duration),
       spawnIntervalSeconds: Number(spawnInterval),
+      debugEnabled,
     }
 
     const validationError = validateOptions(options)
@@ -51,6 +75,7 @@ function OptionsScreen(props: OptionsScreenProps) {
   function handleReset() {
     setDuration(String(DEFAULT_OPTIONS.matchDurationSeconds))
     setSpawnInterval(String(DEFAULT_OPTIONS.spawnIntervalSeconds))
+    setDebugEnabled(DEFAULT_OPTIONS.debugEnabled)
     setError(null)
     setSaved(false)
   }
@@ -65,49 +90,81 @@ function OptionsScreen(props: OptionsScreenProps) {
       <form className="options-menu" onSubmit={handleSave} noValidate>
         <h1>Options</h1>
 
-        <div className="options-field">
-          <label htmlFor="match-duration">Match duration</label>
+        <div className="options-field" role="group" aria-labelledby="duration-label">
+          <span id="duration-label">Game session time</span>
 
-          <input
-            id="match-duration"
-            type="number"
-            min={OPTIONS_LIMITS.durationMin}
-            max={OPTIONS_LIMITS.durationMax}
-            step="1"
-            value={duration}
-            aria-describedby="duration-help options-error"
-            aria-invalid={error !== null}
-            onChange={(event) => {
-              setDuration(event.target.value)
-              setError(null)
-              setSaved(false)
-            }}
-          />
+          <div className="options-stepper">
+            <button
+              type="button"
+              className="options-stepper-button"
+              aria-label="Decrease game session time"
+              disabled={Number(duration) <= OPTIONS_LIMITS.durationMin}
+              onClick={() => changeDuration(-10)}
+            >
+              <img src="/assets/jungleGaming/png/default/ui/controls/icon_minus.png" alt="" />
+            </button>
+
+            <output className="options-stepper-value" aria-live="polite">
+              {duration} s
+            </output>
+
+            <button
+              type="button"
+              className="options-stepper-button"
+              aria-label="Increase game session time"
+              disabled={Number(duration) >= OPTIONS_LIMITS.durationMax}
+              onClick={() => changeDuration(10)}
+            >
+              <img src="/assets/jungleGaming/png/default/ui/controls/icon_plus.png" alt="" />
+            </button>
+          </div>
 
           <small id="duration-help">60–180 seconds</small>
         </div>
 
-        <div className="options-field">
-          <label htmlFor="spawn-interval">Enemy spawn interval</label>
+        <div className="options-field" role="group" aria-labelledby="spawn-label">
+          <span id="spawn-label">Enemy spawn time</span>
 
-          <input
-            id="spawn-interval"
-            type="number"
-            min={OPTIONS_LIMITS.spawnMin}
-            max={OPTIONS_LIMITS.spawnMax}
-            step="any"
-            value={spawnInterval}
-            aria-describedby="spawn-help options-error"
-            aria-invalid={error !== null}
-            onChange={(event) => {
-              setSpawnInterval(event.target.value)
-              setError(null)
-              setSaved(false)
-            }}
-          />
+          <div className="options-stepper">
+            <button
+              type="button"
+              className="options-stepper-button"
+              aria-label="Decrease enemy spawn time"
+              disabled={Number(spawnInterval) <= OPTIONS_LIMITS.spawnMin}
+              onClick={() => changeSpawnInterval(-1)}
+            >
+              <img src="/assets/jungleGaming/png/default/ui/controls/icon_minus.png" alt="" />
+            </button>
+
+            <output className="options-stepper-value" aria-live="polite">
+              {spawnInterval} s
+            </output>
+
+            <button
+              type="button"
+              className="options-stepper-button"
+              aria-label="Increase enemy spawn time"
+              disabled={Number(spawnInterval) >= OPTIONS_LIMITS.spawnMax}
+              onClick={() => changeSpawnInterval(1)}
+            >
+              <img src="/assets/jungleGaming/png/default/ui/controls/icon_plus.png" alt="" />
+            </button>
+          </div>
 
           <small id="spawn-help">1–15 seconds</small>
         </div>
+
+        <button
+          type="button"
+          className="options-menu-secondary-button"
+          aria-pressed={debugEnabled}
+          onClick={() => {
+            setDebugEnabled((current) => !current)
+            setSaved(false)
+          }}
+        >
+          Debug: {debugEnabled ? 'On' : 'Off'}
+        </button>
 
         <p id="options-error" role="alert">
           {error}

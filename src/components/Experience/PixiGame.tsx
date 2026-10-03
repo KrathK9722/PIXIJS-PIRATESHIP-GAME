@@ -21,6 +21,7 @@ import {
 import { createKeyboardInput } from './config/input'
 import { updateSimulation } from './config/simulation'
 import { formatTime } from './config/time'
+import { createHudHealth } from './config/createHudHealth'
 import type { ExplosionState, SimulationState } from '../../types/types'
 import './PixiGame.css'
 import { createHudCounter } from './config/createHudCounter'
@@ -33,6 +34,7 @@ const PLAYER_TEXTURE_URLS = Array.from(
 
 type PixiGameProps = {
   matchDurationSeconds: number
+  debugEnabled: boolean
   onTimeUpdate: (secondsRemaining: number) => void
   onMatchEnd: () => void
 }
@@ -145,8 +147,14 @@ function createEnemyHitBoxPreview(): Graphics {
 function PixiGame(props: PixiGameProps) {
   const hostRef = useRef<HTMLDivElement | null>(null)
   const matchDurationSeconds = props.matchDurationSeconds
+  const debugEnabled = props.debugEnabled
   const onTimeUpdate = props.onTimeUpdate
   const onMatchEnd = props.onMatchEnd
+  const debugEnabledRef = useRef(debugEnabled)
+
+  useEffect(() => {
+    debugEnabledRef.current = debugEnabled
+  }, [debugEnabled])
 
   useEffect(() => {
     let disposed = false
@@ -179,6 +187,11 @@ function PixiGame(props: PixiGameProps) {
         counterPanelTexture,
         timeIconTexture,
         scoreIconTexture,
+        healthFrameTexture,
+        healthGreenTexture,
+        healthAmberTexture,
+        healthRedTexture,
+        heartTexture,
         bulletTexture,
         enemyTextures,
         explosionTextures,
@@ -187,6 +200,11 @@ function PixiGame(props: PixiGameProps) {
         Assets.load<Texture>('/assets/jungleGaming/png/default/ui/hud/counter_panel.png'),
         Assets.load<Texture>('/assets/jungleGaming/png/default/ui/hud/icon_time.png'),
         Assets.load<Texture>('/assets/jungleGaming/png/default/ui/hud/icon_score.png'),
+        Assets.load<Texture>('/assets/jungleGaming/png/default/ui/hud/health_frame.png'),
+        Assets.load<Texture>('/assets/jungleGaming/png/default/ui/hud/health_fill_green.png'),
+        Assets.load<Texture>('/assets/jungleGaming/png/default/ui/hud/health_fill_amber.png'),
+        Assets.load<Texture>('/assets/jungleGaming/png/default/ui/hud/health_fill_red.png'),
+        Assets.load<Texture>('/assets/jungleGaming/png/default/ui/hud/icon_heart.png'),
         Assets.load<Texture>('/assets/kenney_piratePack/PNG/Default size/Ship parts/cannonBall.png'),
         Promise.all(enemyTextureURLs.map((url) => Assets.load<Texture>(url))),
         Promise.all([
@@ -235,6 +253,9 @@ function PixiGame(props: PixiGameProps) {
       // CREATE WAVES
       const ripplesGraphics = new Graphics()
       worldContainer.addChild(ripplesGraphics)
+      // CREATE BULLET HITBOXES
+      const bulletHitBoxGraphics = new Graphics()
+      worldContainer.addChild(bulletHitBoxGraphics)
 
       // CREATE DESTRUCTION PARTICLES
       const destructionParticlesGraphics = new Graphics()
@@ -270,7 +291,10 @@ function PixiGame(props: PixiGameProps) {
         formatTime(matchDurationSeconds),
       )
 
-      timeCounter.container.position.set(24, 16)
+      timeCounter.container.position.set(
+        MOVEMENT_CONFIG.arenaWidth - 24 - 160,
+        16,
+      )
       newApp.stage.addChild(timeCounter.container)
       
       const scoreCounter = createHudCounter(
@@ -280,9 +304,27 @@ function PixiGame(props: PixiGameProps) {
       )
 
       // CREATE SCORE ON CANVAS
-      scoreCounter.container.position.set(24, 80)
+      scoreCounter.container.position.set(
+        MOVEMENT_CONFIG.arenaWidth - 24 - 160 * 2 - 12,
+        16,
+      )
       newApp.stage.addChild(scoreCounter.container)
       let lastReportedScore = state.score
+      // CREATE HEALTH BAR
+      const healthCounter = createHudHealth(
+        healthFrameTexture,
+        heartTexture,
+        {
+          green: healthGreenTexture,
+          amber: healthAmberTexture,
+          red: healthRedTexture,
+        },
+        state.player.health,
+        PLAYER_MAX_HEALTH,
+      )
+      healthCounter.container.position.set(24, 16)
+      newApp.stage.addChild(healthCounter.container)
+      let lastReportedPlayerHealth = state.player.health
 
       // CREATE EXPLOSIONS ON CANVAS
       const explosionSprites = new Map<ExplosionState, Sprite>()
@@ -427,8 +469,8 @@ function PixiGame(props: PixiGameProps) {
           }
 
           enemySprite.visible = true
-          enemyHurtBoxPreview.visible = state.enemy.alive
-          enemyHitBoxPreview.visible = state.enemy.alive
+          enemyHurtBoxPreview.visible = debugEnabledRef.current && state.enemy.alive
+          enemyHitBoxPreview.visible = debugEnabledRef.current && state.enemy.alive
 
           if (state.enemy.alive) {
             enemySprite.position.set(state.enemy.x, state.enemy.y)
@@ -459,11 +501,11 @@ function PixiGame(props: PixiGameProps) {
 
         playerHurtBoxPreview.position.set(state.player.x, state.player.y)
         playerHurtBoxPreview.rotation = state.player.rotation + Math.PI
-        playerHurtBoxPreview.visible = state.player.alive
+        playerHurtBoxPreview.visible = debugEnabledRef.current && state.player.alive
 
         playerHitBoxPreview.position.set(state.player.x, state.player.y)
         playerHitBoxPreview.rotation = state.player.rotation + Math.PI
-        playerHitBoxPreview.visible = state.player.alive
+        playerHitBoxPreview.visible = debugEnabledRef.current && state.player.alive
 
         // DRAW BULLETS
         while (bulletSprites.length < state.bullets.length) {
@@ -492,6 +534,16 @@ function PixiGame(props: PixiGameProps) {
           sprite.position.set(bullet.x, bullet.y)
           sprite.rotation = bullet.rotation
         }
+
+        bulletHitBoxGraphics.clear()
+
+        if (debugEnabledRef.current) {
+          for (const bullet of state.bullets) {
+            bulletHitBoxGraphics
+              .circle(bullet.x, bullet.y, BULLET_RADIUS)
+              .stroke({ color: 0x00ff00, width: 1 })
+          }
+        }
         
         // MATCH TIMER 
         const secondsRemaining = Math.max(
@@ -505,10 +557,15 @@ function PixiGame(props: PixiGameProps) {
           timeCounter.setValue(formatTime(secondsRemaining))
           onTimeUpdate(secondsRemaining)
         }
-
+        // SET VISUAL SCORE TO THE ACTUAL SCORE
         if (state.score !== lastReportedScore) {
           lastReportedScore = state.score
           scoreCounter.setValue(String(state.score))
+        }
+        // SET VISUAL HEALTH TO THE ACTUAL HEALTH
+        if (state.player.health !== lastReportedPlayerHealth) {
+          lastReportedPlayerHealth = state.player.health
+          healthCounter.setValue(state.player.health, PLAYER_MAX_HEALTH)
         }
 
         // FINISH MATCH

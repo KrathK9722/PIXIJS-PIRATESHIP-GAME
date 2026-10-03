@@ -61,6 +61,7 @@ export type SimulationState = {
 export type PlayerOptions = {
   matchDurationSeconds: number
   spawnIntervalSeconds: number
+  debugEnabled: boolean
 }
 
 export type RippleState = {

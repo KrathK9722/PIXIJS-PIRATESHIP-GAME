@@ -34,6 +34,10 @@ export function loadOptions(): PlayerOptions {
     const options: PlayerOptions = {
       matchDurationSeconds: parsed.matchDurationSeconds,
       spawnIntervalSeconds: parsed.spawnIntervalSeconds,
+      debugEnabled:
+        'debugEnabled' in parsed && typeof parsed.debugEnabled === 'boolean'
+          ? parsed.debugEnabled
+          : false,
     }
 
     return validateOptions(options) === null? options: { ...DEFAULT_OPTIONS }

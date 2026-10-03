@@ -225,7 +225,6 @@ export async function updateSimulation(
   deltaSeconds: number,
 ): Promise<void> {
     const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-    let canShoot = true;
 
     // MATCH DURATION
     if (state.isFinished) {
@@ -273,7 +272,6 @@ export async function updateSimulation(
         )
 
         if (input.shoot && player.shootCooldown <= 0) {
-            canShoot = false;
             const distanceFromPlayer = PLAYER_HEIGHT / 2 + BULLET_RADIUS
             const spread = (Math.random() - 0.5) * 0.2
             state.bullets.push({
@@ -286,12 +284,10 @@ export async function updateSimulation(
             player.shootCooldown = 0.5
         }
         else if (input.shootLeft && player.shootCooldown <= 0) {
-            canShoot = false;
             fireSideVolley(state, -1)
             player.shootCooldown = 0.5
         }
         else if (input.shootRight && player.shootCooldown <= 0) {
-            canShoot = false;
             fireSideVolley(state, 1)
             player.shootCooldown = 0.5
         }
