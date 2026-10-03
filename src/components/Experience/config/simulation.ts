@@ -23,6 +23,29 @@ function bulletHitsBoat(
     return Math.hypot(localX - closestX, localY - closestY) <= BULLET_RADIUS
 }
 
+// FIRE SIDE FUNCTION
+function fireSideVolley(state: SimulationState, side: -1 | 1): void {
+    const spread = (Math.random() - 0.5) * 0.2
+    const player = state.player
+    const sideAngle = player.rotation + side * Math.PI / 2
+    const spawnDistance = PLAYER_WIDTH / 2 + BULLET_RADIUS
+    const diagonalAngle = Math.PI / 6
+    const spawnX =
+        player.x + side * Math.cos(player.rotation) * spawnDistance
+    const spawnY =
+        player.y + side * Math.sin(player.rotation) * spawnDistance
+
+    for (const angleOffset of [-diagonalAngle, 0, diagonalAngle]) {
+        state.bullets.push({
+            x: spawnX,
+            y: spawnY,
+            rotation: sideAngle + angleOffset + spread,
+            lifeTime: 0,
+            owner: 'player',
+        })
+    }
+}
+
 // POINT MADE FOR STORING 2D COORDINATES
 type Point = { x: number; y: number }
 
@@ -202,6 +225,7 @@ export async function updateSimulation(
   deltaSeconds: number,
 ): Promise<void> {
     const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+    let canShoot = true;
 
     // MATCH DURATION
     if (state.isFinished) {
@@ -243,7 +267,13 @@ export async function updateSimulation(
             Math.min(config.arenaHeight - config.playerRadius, player.y),
         )
 
-        if (input.shoot) {
+        player.shootCooldown = Math.max(
+            0,
+        player.shootCooldown - deltaSeconds,
+        )
+
+        if (input.shoot && player.shootCooldown <= 0) {
+            canShoot = false;
             const distanceFromPlayer = PLAYER_HEIGHT / 2 + BULLET_RADIUS
             const spread = (Math.random() - 0.5) * 0.2
             state.bullets.push({
@@ -253,6 +283,17 @@ export async function updateSimulation(
                 lifeTime: 0,
                 owner: 'player',
             })
+            player.shootCooldown = 0.5
+        }
+        else if (input.shootLeft && player.shootCooldown <= 0) {
+            canShoot = false;
+            fireSideVolley(state, -1)
+            player.shootCooldown = 0.5
+        }
+        else if (input.shootRight && player.shootCooldown <= 0) {
+            canShoot = false;
+            fireSideVolley(state, 1)
+            player.shootCooldown = 0.5
         }
     }
 

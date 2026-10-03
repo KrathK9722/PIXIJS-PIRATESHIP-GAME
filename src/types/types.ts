@@ -5,6 +5,7 @@ export type PlayerState = {
   health: number
   alive: boolean
   destroyed: boolean
+  shootCooldown: number
 }
 
 export type EnemyState = {
@@ -30,6 +31,8 @@ export type MovementInput = {
   forward: boolean
   turnLeft: boolean
   turnRight: boolean
+  shootLeft: boolean
+  shootRight: boolean
 }
 
 export type MovementConfig = {

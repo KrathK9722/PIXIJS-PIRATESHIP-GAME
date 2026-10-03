@@ -54,6 +54,7 @@ function createInitialSimulationState(matchDurationSeconds: number): SimulationS
       health: PLAYER_MAX_HEALTH,
       alive: true,
       destroyed: false,
+      shootCooldown: 0,
     },
     enemy: {
       x: MOVEMENT_CONFIG.arenaWidth / 2,
@@ -308,6 +309,8 @@ function PixiGame(props: PixiGameProps) {
           turnLeft: false,
           turnRight: false,
           shoot: false,
+          shootLeft: false,
+          shootRight: false,
         }, deltaSeconds)
         
   
